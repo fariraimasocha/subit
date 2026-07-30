@@ -5,7 +5,7 @@ import type { Theme } from '~/lib/theme.ts'
 import { createProject, deleteProject, getProject, listProjects } from './d1.server.ts'
 import type { Project } from '~/lib/project.ts'
 import { jobs, runExport, runIngest } from './jobs.server.ts'
-import { buildKey, presignPutUrl, r2Configured } from './r2.server.ts'
+import { buildKey, deleteObject, presignPutUrl, r2Configured } from './r2.server.ts'
 import { d1Configured } from './d1.server.ts'
 import { groqConfigured } from './groq.server.ts'
 import { updateProject } from './d1.server.ts'
@@ -59,6 +59,18 @@ export const presign = createServerFn({ method: 'POST' })
     const key = buildKey('src', ext)
     const url = await presignPutUrl(key, data.contentType, data.size)
     return { key, url }
+  })
+
+/**
+ * Drops an uploaded object whose project row was never created. Without it a
+ * failed createProjectFn leaves a multi-gigabyte orphan in the bucket that
+ * nothing will ever reference or clean up.
+ */
+export const discardUpload = createServerFn({ method: 'POST' })
+  .validator(z.object({ key: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    await deleteObject(data.key)
+    return { ok: true }
   })
 
 export const createProjectFn = createServerFn({ method: 'POST' })

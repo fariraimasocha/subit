@@ -82,6 +82,13 @@ export async function putObject(key: string, body: Uint8Array | ArrayBuffer, con
   return key
 }
 
+export async function deleteObject(key: string) {
+  assertConfigured()
+  const res = await aws().fetch(objectUrl(key), { method: 'DELETE' })
+  // 404 means it was never there, which is the state the caller wanted anyway.
+  if (!res.ok && res.status !== 404) throw new Error(`R2 DELETE ${key} failed: ${res.status}`)
+}
+
 /**
  * Public URL if R2_PUBLIC_URL is set, otherwise a long-lived presigned GET.
  * ponytail: no CDN, no cache headers. Ceiling: a custom domain on the bucket.

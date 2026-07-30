@@ -78,7 +78,9 @@ export type Probe = { width: number; height: number; duration: number }
 export async function probe(file: string, cwd: string): Promise<Probe> {
   const out = await run(
     FFPROBE,
-    ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-show_entries', 'format=duration', '-of', 'json', file],
+    // One combined -show_entries, not two. Repeating the flag is last-wins on
+    // some ffprobe builds, which would silently drop the dimensions.
+    ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height:format=duration', '-of', 'json', file],
     { cwd },
   )
   const j = JSON.parse(out) as { streams?: { width?: number; height?: number }[]; format?: { duration?: string } }

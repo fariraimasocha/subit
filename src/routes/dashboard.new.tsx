@@ -7,11 +7,15 @@ import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
-import { createProjectFn, presign } from '~/server/api.ts'
+import { createProjectFn, discardUpload, presign } from '~/server/api.ts'
 
 export const Route = createFileRoute('/dashboard/new')({ component: NewProject })
 
 const ACCEPT = '.mp4,.mov,.m4v,video/mp4,video/quicktime'
+const EXTS = ['mp4', 'mov', 'm4v']
+
+/** The dropzone bypasses the input's `accept`, so it has to check for itself. */
+const accepted = (f: File) => EXTS.includes(f.name.split('.').pop()?.toLowerCase() ?? '')
 const MAX_BYTES = 2 * 1024 * 1024 * 1024
 
 /** `fetch` has no upload progress event, so the PUT goes through XHR. */
@@ -50,7 +54,14 @@ function NewProject() {
         },
       })
       await putWithProgress(url, file, setPct)
-      return createProjectFn({ data: { name: file.name.replace(/\.[^.]+$/, ''), srcKey: key } })
+      try {
+        return await createProjectFn({ data: { name: file.name.replace(/\.[^.]+$/, ''), srcKey: key } })
+      } catch (e) {
+        // The object is uploaded but nothing references it, so bin it before
+        // rethrowing rather than leaving gigabytes of orphan in the bucket.
+        await discardUpload({ data: { key } }).catch(() => {})
+        throw e
+      }
     },
     onError: (e) => {
       setPct(null)
@@ -84,7 +95,9 @@ function NewProject() {
         e.preventDefault()
         setDragging(false)
         const file = e.dataTransfer.files?.[0]
-        if (file && !disabled) upload.mutate(file)
+        if (!file || disabled) return
+        if (!accepted(file)) return toast.error('Only MP4 and MOV files are supported')
+        upload.mutate(file)
       }}
     >
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">New project</h1>

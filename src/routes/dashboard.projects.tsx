@@ -16,6 +16,15 @@ import { StatusBadge } from '~/components/status-badge.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog.tsx'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table.tsx'
 import type { Project } from '~/lib/project.ts'
 import { projectsQuery, qk, useConfig } from '~/lib/queries.ts'
@@ -31,6 +40,8 @@ function Projects() {
   const { config, ready, known } = useConfig()
   const { data, isPending, error } = useQuery(projectsQuery(ready))
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
+  // Deleting drops the row and the video with it, so it asks first.
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null)
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteProjectFn({ data: { id } }),
@@ -39,6 +50,7 @@ function Projects() {
       qc.invalidateQueries({ queryKey: qk.projects })
       toast.success('Project deleted')
     },
+    onSettled: () => setPendingDelete(null),
   })
 
   const columns = [
@@ -56,7 +68,9 @@ function Projects() {
       cell: (c) => {
         const d = c.getValue()
         if (!d) return <span className="text-muted-foreground">-</span>
-        return `${Math.floor(d / 60)}:${String(Math.round(d % 60)).padStart(2, '0')}`
+        // Round first, then split, or 179.6s formats as 2:60.
+        const total = Math.round(d)
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
       },
     }),
     col.accessor((r) => r.cues.length, {
@@ -76,8 +90,7 @@ function Projects() {
           size="icon"
           variant="ghost"
           aria-label={`Delete ${c.row.original.name}`}
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(c.row.original.id)}
+          onClick={() => setPendingDelete(c.row.original)}
         >
           <Trash2 className="size-4" />
         </Button>
@@ -177,6 +190,29 @@ function Projects() {
           </div>
         </>
       )}
+
+      <Dialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this project?</DialogTitle>
+            <DialogDescription>
+              {pendingDelete?.name} and its transcript go for good. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Keep it</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => pendingDelete && remove.mutate(pendingDelete.id)}
+            >
+              {remove.isPending ? 'Deleting' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -26,6 +26,7 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
               key={t.id}
               type="button"
               onClick={() => onPreset(t)}
+              aria-pressed={theme.id === t.id}
               className={cn(
                 'flex h-16 items-center justify-center rounded-lg border bg-neutral-900 px-2 transition-colors',
                 theme.id === t.id ? 'border-foreground' : 'border-border hover:border-foreground/40',

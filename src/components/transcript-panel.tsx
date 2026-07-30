@@ -119,7 +119,8 @@ function WordInput({
       <Input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => onCommit(draft.trim())}
+        // An empty word would burn a blank span, so revert instead of committing.
+        onBlur={() => (draft.trim() ? onCommit(draft.trim()) : setDraft(value))}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur()
           if (e.key === 'Escape') setDraft(value)
