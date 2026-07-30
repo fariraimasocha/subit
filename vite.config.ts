@@ -1,0 +1,21 @@
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import viteReact from '@vitejs/plugin-react'
+import tsConfigPaths from 'vite-tsconfig-paths'
+
+export default defineConfig({
+  plugins: [
+    tsConfigPaths(),
+    tanstackStart({
+      // The explicit server boundary. Anything matching `*.server.ts` is a build
+      // error if a client module reaches it, so `src/server/db.server.ts` can
+      // only ever be touched through a server function.
+      importProtection: {
+        enabled: true,
+        behavior: 'error',
+        client: { files: [/\.server\.[jt]sx?$/] },
+      },
+    }),
+    viteReact(),
+  ],
+})
