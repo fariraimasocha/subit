@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tsConfigPaths from 'vite-tsconfig-paths'
@@ -6,6 +7,7 @@ import tsConfigPaths from 'vite-tsconfig-paths'
 export default defineConfig({
   plugins: [
     tsConfigPaths(),
+    tailwindcss(),
     tanstackStart({
       // The explicit server boundary. Anything matching `*.server.ts` is a build
       // error if a client module reaches it, so `src/server/db.server.ts` can

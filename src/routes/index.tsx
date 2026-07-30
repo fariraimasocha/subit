@@ -1,117 +1,74 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
-import { useServerFn } from '@tanstack/react-start'
-import { listSearchValidator, money, type ListSearch } from '~/schemas'
-import { listSubs, setStatus } from '~/server/subs'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Button } from '~/components/ui/button.tsx'
+import { THEMES } from '~/lib/theme.ts'
 
-export const Route = createFileRoute('/')({
-  // Streamed full-document SSR. This is the default, stated here because the
-  // sibling routes deliberately pick something else.
-  ssr: true,
-  // Parsed and defaulted once, at the route, before the loader runs.
-  // `Route.useSearch()` and `navigate({ search })` are both typed off the schema,
-  // and a junk param like ?page=abc degrades to its default instead of erroring.
-  validateSearch: listSearchValidator,
-  // Only re-run the loader when a param the query actually uses changes.
-  loaderDeps: ({ search }) => search,
-  loader: ({ deps }) => listSubs({ data: deps }),
-  component: SubsList,
-})
+export const Route = createFileRoute('/')({ component: Landing })
 
-function SubsList() {
-  const search = Route.useSearch()
-  const { items, total, page, pages } = Route.useLoaderData()
-  const navigate = Route.useNavigate()
-  const router = useRouter()
-  const update = useServerFn(setStatus)
-
-  // Any filter change resets to page 1, otherwise you can land on an empty page.
-  const patch = (next: Partial<ListSearch>) =>
-    navigate({ search: (prev) => ({ ...prev, ...next, page: next.page ?? 1 }) })
-
+function Landing() {
   return (
-    <>
-      <form className="filters" onSubmit={(e) => e.preventDefault()}>
-        <label>
-          <span className="dim">Search </span>
-          <input
-            type="search"
-            defaultValue={search.q}
-            placeholder="Name or vendor"
-            aria-label="Search subscriptions"
-            onChange={(e) => patch({ q: e.target.value })}
-          />
-        </label>
-        <select
-          value={search.status}
-          aria-label="Filter by status"
-          onChange={(e) => patch({ status: e.target.value as ListSearch['status'] })}
-        >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <select
-          value={search.sort}
-          aria-label="Sort by"
-          onChange={(e) => patch({ sort: e.target.value as ListSearch['sort'] })}
-        >
-          <option value="renewsAt">Renews soonest</option>
-          <option value="price">Most expensive</option>
-          <option value="name">Name</option>
-        </select>
-      </form>
+    <main className="min-h-dvh bg-background">
+      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
+        <span className="text-lg font-semibold tracking-tight">Subit</span>
+        <Button asChild size="sm">
+          <Link to="/dashboard">Open dashboard</Link>
+        </Button>
+      </header>
 
-      {items.length === 0 && <p className="panel dim">Nothing matches that filter.</p>}
+      <section className="mx-auto max-w-3xl px-6 pt-16 pb-10 text-center">
+        <h1 className="text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
+          Captions that land on the word.
+        </h1>
+        <p className="mx-auto mt-5 max-w-xl text-lg text-muted-foreground text-pretty">
+          Drop in an MP4 or MOV. Subit transcribes it with word level timing, groups it into short
+          punchy cues, and burns them straight into the video.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Button asChild size="lg">
+            <Link to="/dashboard/new">Upload a video</Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link to="/dashboard">See your projects</Link>
+          </Button>
+        </div>
+      </section>
 
-      {items.map((sub) => (
-        <article key={sub.id} className="panel">
-          <div className="row">
-            <div>
-              <Link to="/subs/$id" params={{ id: sub.id }}>
-                {sub.name}
-              </Link>{' '}
-              <span className="badge" data-s={sub.status}>
-                {sub.status}
-              </span>
-              <div className="dim">
-                {sub.vendor} &middot; renews {sub.renewsAt}
-              </div>
-            </div>
-            <div className="row" style={{ gap: 10 }}>
-              <span className="mono">
-                {money(sub.priceCents)}
-                <span className="dim">/{sub.cycle === 'yearly' ? 'yr' : 'mo'}</span>
-              </span>
-              <button
-                onClick={async () => {
-                  await update({
-                    data: { id: sub.id, status: sub.status === 'active' ? 'paused' : 'active' },
-                  })
-                  // Re-runs the loaders for the current match, no second cache.
-                  router.invalidate()
-                }}
-              >
-                {sub.status === 'active' ? 'Pause' : 'Activate'}
-              </button>
-            </div>
+      <section className="mx-auto grid max-w-4xl grid-cols-2 gap-3 px-6 pb-16 sm:grid-cols-5">
+        {THEMES.map((t) => (
+          <div
+            key={t.id}
+            className="flex aspect-[4/5] items-center justify-center rounded-xl border bg-neutral-900 p-3"
+          >
+            <span
+              className="text-center leading-tight"
+              style={{
+                fontFamily: `'${t.fontFamily}', sans-serif`,
+                color: t.primary,
+                fontSize: 22,
+                textTransform: t.uppercase ? 'uppercase' : 'none',
+                WebkitTextStroke: t.outlinePct ? `${t.outlinePct * 3}px ${t.outline}` : undefined,
+                paintOrder: 'stroke fill',
+                backgroundColor: t.boxColor ?? undefined,
+                padding: t.boxColor ? '2px 6px' : undefined,
+              }}
+            >
+              <span style={{ color: t.highlight }}>{t.name}</span> style
+            </span>
           </div>
-        </article>
-      ))}
+        ))}
+      </section>
 
-      <div className="row" style={{ marginTop: 16 }}>
-        <span className="dim">
-          {total} subscription{total === 1 ? '' : 's'} &middot; page {page} of {pages}
-        </span>
-        <span className="row" style={{ gap: 8 }}>
-          <button disabled={page <= 1} onClick={() => patch({ page: page - 1 })}>
-            Previous
-          </button>
-          <button disabled={page >= pages} onClick={() => patch({ page: page + 1 })}>
-            Next
-          </button>
-        </span>
-      </div>
-    </>
+      <section className="mx-auto max-w-4xl grid gap-6 px-6 pb-24 sm:grid-cols-3">
+        {[
+          ['1. Upload', 'MP4 or MOV, portrait or landscape. Rotation and odd codecs get normalised on the way in.'],
+          ['2. Edit', 'Pick a preset, drag the caption position, fix anything the model misheard.'],
+          ['3. Export', 'A burned in MP4 that matches the preview frame for frame.'],
+        ].map(([title, body]) => (
+          <div key={title}>
+            <h3 className="font-medium">{title}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+          </div>
+        ))}
+      </section>
+    </main>
   )
 }

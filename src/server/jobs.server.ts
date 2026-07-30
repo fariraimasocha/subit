@@ -1,0 +1,118 @@
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { toAss } from '~/lib/ass.ts'
+import { groupWords } from '~/lib/cues.ts'
+import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
+import { getProject, updateProject } from './d1.server.ts'
+import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, probe } from './ffmpeg.server.ts'
+import { transcribe } from './groq.server.ts'
+import { buildKey, presignGetUrl, publicUrl, putObject } from './r2.server.ts'
+
+/**
+ * ponytail: in-memory Map. Ceiling: single process, single machine. Restart the
+ * server mid-export and the job vanishes (the UI shows "lost, retry"). Fixing it
+ * means a jobs table plus a reaper, which is a queue, which is what we said no to.
+ */
+export type Job = { status: 'running' | 'done' | 'error'; pct: number; url?: string; error?: string }
+export const jobs = new Map<string, Job>()
+
+const FONTS_DIR = path.resolve(process.cwd(), 'public/fonts')
+
+/**
+ * Normalize, probe, transcribe, group. Runs detached from the request that
+ * started it. Safe here only because this is a long-lived Node process; on
+ * serverless the function would be frozen the moment the response was sent,
+ * which is the concrete reason Workers and Vercel are off the table.
+ */
+export async function runIngest(projectId: string) {
+  const dir = await makeJobDir()
+  try {
+    const project = await getProject(projectId)
+    if (!project) throw new Error('project not found')
+    await updateProject(projectId, { status: 'processing', error: null })
+
+    // ffmpeg reads the R2 object over HTTPS directly, so there is no download
+    // step and no source temp file.
+    const srcUrl = await presignGetUrl(project.src_key)
+    const norm = await normalize(srcUrl, dir)
+
+    // Always probe norm.mp4, never the original: iPhone portrait video is stored
+    // landscape with a 90 degree display matrix, so the original reports
+    // transposed dimensions and every caption would land off frame.
+    const meta = await probe(norm, dir)
+
+    const normKey = buildKey('norm', 'mp4')
+    await putObject(normKey, await readFile(path.join(dir, norm)), 'video/mp4')
+    const normUrl = await publicUrl(normKey)
+
+    await updateProject(projectId, {
+      norm_key: normKey,
+      norm_url: normUrl,
+      width: meta.width,
+      height: meta.height,
+      duration: meta.duration,
+    })
+
+    const cues = (await hasAudio(norm, dir))
+      ? groupWords(await transcribe(norm, dir, meta.duration))
+      : []
+
+    await updateProject(projectId, {
+      status: 'ready',
+      cues_json: JSON.stringify(cues),
+      theme_json: project.theme ? JSON.stringify(project.theme) : JSON.stringify(DEFAULT_THEME),
+    })
+  } catch (e) {
+    await updateProject(projectId, { status: 'error', error: (e as Error).message.slice(0, 900) }).catch(() => {})
+  } finally {
+    await cleanJobDir(dir)
+  }
+}
+
+export async function runExport(projectId: string, jobId: string) {
+  const dir = await makeJobDir()
+  jobs.set(jobId, { status: 'running', pct: 0 })
+  try {
+    const project = await getProject(projectId)
+    if (!project) throw new Error('project not found')
+    if (!project.norm_key || !project.width || !project.height) throw new Error('project has not finished processing')
+
+    const theme: Theme = project.theme ?? DEFAULT_THEME
+    await updateProject(projectId, { status: 'exporting', error: null })
+
+    const normUrl = await presignGetUrl(project.norm_key)
+    // Pull norm.mp4 down once: the burn reads it twice (video and audio copy)
+    // and ffmpeg would otherwise range-request R2 the whole way through.
+    const res = await fetch(normUrl)
+    if (!res.ok) throw new Error(`could not fetch norm.mp4: ${res.status}`)
+    await writeFile(path.join(dir, 'norm.mp4'), new Uint8Array(await res.arrayBuffer()))
+
+    // PlayResX/PlayResY come from the same probe that produced the file being
+    // burned. Never let a caller pass them in separately.
+    await writeFile(path.join(dir, 'cues.ass'), toAss(project.cues, theme, project.width, project.height), 'utf8')
+
+    // fontsdir matches the font's INTERNAL family name, not the filename. Copy
+    // the TTF into jobDir/fonts so the spawn cwd relative path works.
+    await mkdir(path.join(dir, 'fonts'), { recursive: true })
+    await copyFile(path.join(FONTS_DIR, theme.fontFile), path.join(dir, 'fonts', theme.fontFile))
+
+    const out = await burn('norm.mp4', 'cues.ass', dir, project.duration ?? 0, (pct) => {
+      const j = jobs.get(jobId)
+      if (j) jobs.set(jobId, { ...j, pct })
+    })
+
+    const key = buildKey('export', 'mp4')
+    await putObject(key, await readFile(path.join(dir, out)), 'video/mp4')
+    const url = await publicUrl(key)
+
+    await updateProject(projectId, { status: 'done', export_url: url })
+    jobs.set(jobId, { status: 'done', pct: 100, url })
+  } catch (e) {
+    const message = (e as Error).message.slice(0, 900)
+    jobs.set(jobId, { status: 'error', pct: 0, error: message })
+    await updateProject(projectId, { status: 'error', error: message }).catch(() => {})
+  } finally {
+    // After the upload resolves, never before.
+    await cleanJobDir(dir)
+  }
+}

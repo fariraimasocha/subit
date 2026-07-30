@@ -10,63 +10,97 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as StatsRouteImport } from './routes/stats'
-import { Route as SubsIdRouteImport } from './routes/subs.$id'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as DashboardNewRouteImport } from './routes/dashboard.new'
+import { Route as DashboardProjectsRouteImport } from './routes/dashboard.projects'
+import { Route as EditorIdRouteImport } from './routes/editor.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StatsRoute = StatsRouteImport.update({
-  id: '/stats',
-  path: '/stats',
-  getParentRoute: () => rootRouteImport,
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRoute,
 } as any)
-const SubsIdRoute = SubsIdRouteImport.update({
-  id: '/subs/$id',
-  path: '/subs/$id',
+const DashboardNewRoute = DashboardNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardProjectsRoute = DashboardProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const EditorIdRoute = EditorIdRouteImport.update({
+  id: '/editor/$id',
+  path: '/editor/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
-  '/stats': typeof StatsRoute
-  '/subs/$id': typeof SubsIdRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/new': typeof DashboardNewRoute
+  '/dashboard/projects': typeof DashboardProjectsRoute
+  '/editor/$id': typeof EditorIdRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
-  '/stats': typeof StatsRoute
-  '/subs/$id': typeof SubsIdRoute
+  '/dashboard/new': typeof DashboardNewRoute
+  '/dashboard/projects': typeof DashboardProjectsRoute
+  '/editor/$id': typeof EditorIdRoute
+  '/dashboard': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/settings': typeof SettingsRoute
-  '/stats': typeof StatsRoute
-  '/subs/$id': typeof SubsIdRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/new': typeof DashboardNewRoute
+  '/dashboard/projects': typeof DashboardProjectsRoute
+  '/editor/$id': typeof EditorIdRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/stats' | '/subs/$id'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/dashboard/new'
+    | '/dashboard/projects'
+    | '/editor/$id'
+    | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/stats' | '/subs/$id'
-  id: '__root__' | '/' | '/settings' | '/stats' | '/subs/$id'
+  to:
+    | '/'
+    | '/dashboard/new'
+    | '/dashboard/projects'
+    | '/editor/$id'
+    | '/dashboard'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/dashboard/new'
+    | '/dashboard/projects'
+    | '/editor/$id'
+    | '/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SettingsRoute: typeof SettingsRoute
-  StatsRoute: typeof StatsRoute
-  SubsIdRoute: typeof SubsIdRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
+  EditorIdRoute: typeof EditorIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,35 +112,64 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/stats': {
-      id: '/stats'
-      path: '/stats'
-      fullPath: '/stats'
-      preLoaderRoute: typeof StatsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
     }
-    '/subs/$id': {
-      id: '/subs/$id'
-      path: '/subs/$id'
-      fullPath: '/subs/$id'
-      preLoaderRoute: typeof SubsIdRouteImport
+    '/dashboard/new': {
+      id: '/dashboard/new'
+      path: '/new'
+      fullPath: '/dashboard/new'
+      preLoaderRoute: typeof DashboardNewRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/projects': {
+      id: '/dashboard/projects'
+      path: '/projects'
+      fullPath: '/dashboard/projects'
+      preLoaderRoute: typeof DashboardProjectsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/editor/$id': {
+      id: '/editor/$id'
+      path: '/editor/$id'
+      fullPath: '/editor/$id'
+      preLoaderRoute: typeof EditorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
+interface DashboardRouteChildren {
+  DashboardNewRoute: typeof DashboardNewRoute
+  DashboardProjectsRoute: typeof DashboardProjectsRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardNewRoute: DashboardNewRoute,
+  DashboardProjectsRoute: DashboardProjectsRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SettingsRoute: SettingsRoute,
-  StatsRoute: StatsRoute,
-  SubsIdRoute: SubsIdRoute,
+  DashboardRoute: DashboardRouteWithChildren,
+  EditorIdRoute: EditorIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
