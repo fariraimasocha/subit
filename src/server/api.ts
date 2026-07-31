@@ -45,6 +45,30 @@ export const getConfig = createServerFn({ method: 'GET' }).handler(async () => (
   groq: groqConfigured(),
 }))
 
+/**
+ * Keys this process handed out and has not seen claimed yet, so the failed
+ * insert cleanup can only ever delete an object it just issued. Without this,
+ * srcKey is caller controlled: during a D1 outage every createProjectFn call
+ * throws, and someone could pass the key of a finished export and have the
+ * server delete it for them.
+ *
+ * ponytail: in-memory, same ceiling as the jobs Map. A restart forgets the
+ * pending keys, which only costs a leaked orphan object, never a wrong delete.
+ */
+const issuedKeys = new Map<string, number>()
+const KEY_TTL_MS = 60 * 60 * 1000
+
+function rememberKey(key: string) {
+  const cutoff = Date.now() - KEY_TTL_MS
+  for (const [k, t] of issuedKeys) if (t < cutoff) issuedKeys.delete(k)
+  issuedKeys.set(key, Date.now())
+}
+
+/** True only once per key, so a key cannot be replayed to force a second delete. */
+function claimKey(key: string) {
+  return issuedKeys.delete(key)
+}
+
 export const presign = createServerFn({ method: 'POST' })
   .validator(
     z.object({
@@ -58,6 +82,7 @@ export const presign = createServerFn({ method: 'POST' })
     if (!['mp4', 'mov'].includes(ext)) throw new Error('Only MP4 and MOV files are supported')
     const key = buildKey('src', ext)
     const url = await presignPutUrl(key, data.contentType, data.size)
+    rememberKey(key)
     return { key, url }
   })
 
@@ -65,16 +90,18 @@ export const createProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ name: z.string().min(1).max(200), srcKey: z.string().min(1) }))
   .handler(async ({ data }) => {
     const id = crypto.randomUUID()
+    // Claimed before the insert so a replay cannot come back and delete the
+    // object out from under a project that was created successfully.
+    const ours = claimKey(data.srcKey)
     try {
       await createProject(id, data.name, data.srcKey)
     } catch (e) {
       // The object is uploaded but no row will ever reference it, so bin it
-      // here rather than exposing a delete-by-key endpoint. With no auth in
-      // this app that endpoint would let anyone delete any object in the
-      // bucket, and the keys are visible in every norm_url and export_url.
+      // here rather than exposing a delete-by-key endpoint. Only keys this
+      // process issued are eligible.
       // ponytail: this does not cover the browser dying between the PUT and
       // this call. That orphan needs a reaper, which is the queue we said no to.
-      await deleteObject(data.srcKey).catch(() => {})
+      if (ours) await deleteObject(data.srcKey).catch(() => {})
       throw e
     }
     // Detached on purpose. Long-lived Node process only, see runIngest.

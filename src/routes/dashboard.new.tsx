@@ -127,7 +127,10 @@ function NewProject() {
               const file = e.target.files?.[0]
               // Reset so picking the same file twice fires change again.
               e.target.value = ''
-              if (file) upload.mutate(file)
+              if (!file) return
+              // `accept` is only a hint: the picker still allows "All files".
+              if (!accepted(file)) return toast.error('Only MP4 and MOV files are supported')
+              upload.mutate(file)
             }}
           />
 
