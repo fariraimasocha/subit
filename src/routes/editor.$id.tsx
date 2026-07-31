@@ -4,12 +4,14 @@ import { ArrowLeft, Download, Loader2, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IngestProgress } from '~/components/ingest-progress.tsx'
+import { SidebarShell } from '~/components/sidebar-shell.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { StylePanel } from '~/components/style-panel.tsx'
 import { TranscriptPanel } from '~/components/transcript-panel.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
+import { SidebarTrigger } from '~/components/ui/sidebar.tsx'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs.tsx'
 import { VideoPlayer } from '~/components/video-player.tsx'
 import type { Cue } from '~/lib/cues.ts'
@@ -102,19 +104,50 @@ function Editor() {
     }
   }, [job.data?.status])
 
-  if (known && !ready) return <Shell><SetupNotice config={config} /></Shell>
-  if (isPending) return <Skeleton className="m-8 h-[70vh] rounded-xl" />
-  if (error) return <Shell><Msg title="Could not load this project" body={(error as Error).message} /></Shell>
-  if (!project) return <Shell><Msg title="Project not found" body="It may have been deleted." /></Shell>
+  // Every early return goes through Shell too, or the sidebar flickers away
+  // while the project loads and comes back once it lands.
+  if (known && !ready)
+    return (
+      <Shell>
+        <Pad>
+          <SetupNotice config={config} />
+        </Pad>
+      </Shell>
+    )
+  if (isPending)
+    return (
+      <Shell>
+        <Pad>
+          <Skeleton className="h-[70vh] rounded-xl" />
+        </Pad>
+      </Shell>
+    )
+  if (error)
+    return (
+      <Shell>
+        <Pad>
+          <Msg title="Could not load this project" body={(error as Error).message} />
+        </Pad>
+      </Shell>
+    )
+  if (!project)
+    return (
+      <Shell>
+        <Pad>
+          <Msg title="Project not found" body="It may have been deleted." />
+        </Pad>
+      </Shell>
+    )
 
   const notReady = project.status === 'uploaded' || project.status === 'processing'
   const exporting = job.data?.status === 'running'
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <Shell>
       {/* Editor chrome, not page content: the actions stay reachable while the
           preset list and the transcript scroll underneath. */}
       <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+        <SidebarTrigger />
         <Button asChild size="icon" variant="ghost" aria-label="Back to projects">
           <Link to="/dashboard/projects">
             <ArrowLeft className="size-4" />
@@ -245,12 +278,21 @@ function Editor() {
         </div>
       </div>
       </div>
-    </div>
+    </Shell>
   )
 }
 
+function Pad({ children }: { children: React.ReactNode }) {
+  return <div className="p-4 md:p-6">{children}</div>
+}
+
+/** The editor sits inside the same nav shell as the dashboard. */
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-7xl p-4 md:p-8">{children}</div>
+  return (
+    <SidebarShell>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    </SidebarShell>
+  )
 }
 
 function Msg({ title, body }: { title: string; body: string }) {

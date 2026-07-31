@@ -1,8 +1,8 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AppSidebar } from '~/components/app-sidebar.tsx'
+import { SidebarShell } from '~/components/sidebar-shell.tsx'
 import { Separator } from '~/components/ui/separator.tsx'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/ui/sidebar.tsx'
+import { SidebarTrigger } from '~/components/ui/sidebar.tsx'
 import { configQuery } from '~/lib/queries.ts'
 
 export const Route = createFileRoute('/dashboard')({ component: DashboardShell })
@@ -14,9 +14,8 @@ function DashboardShell() {
     : []
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
+    <SidebarShell>
+      <>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mr-2 h-4" />
@@ -31,7 +30,7 @@ function DashboardShell() {
         <div className="flex-1 p-4 md:p-8">
           <Outlet />
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </>
+    </SidebarShell>
   )
 }
