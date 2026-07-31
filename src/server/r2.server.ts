@@ -90,7 +90,10 @@ export function exportKeyOf(url: string | null) {
   if (!url) return null
   try {
     const path = new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
-    const i = path.indexOf('export')
+    // lastIndexOf, not indexOf: a presigned URL carries the bucket in the path
+    // too, so a bucket literally named "export" would otherwise match first and
+    // yield a key that points at nothing.
+    const i = path.lastIndexOf('export')
     return i >= 0 ? path.slice(i).join('/') : null
   } catch {
     return null
