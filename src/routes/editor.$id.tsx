@@ -30,11 +30,18 @@ function Editor() {
   const [jobId, setJobId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // Hydrate the store from the persisted snapshot once the project arrives.
+  /**
+   * Hydrate the store from the persisted snapshot ONCE per project. project.theme
+   * is a fresh object out of JSON.parse on every refetch, so keying the effect on
+   * it would re-seed the store each poll and snap a slider back to the last saved
+   * value while the user is still dragging it.
+   */
+  const hydrated = useRef<string | null>(null)
   useEffect(() => {
-    if (project?.theme) setTheme(project.theme)
-    else if (project) setTheme(DEFAULT_THEME)
-  }, [project?.id, project?.theme, setTheme])
+    if (!project || hydrated.current === project.id) return
+    hydrated.current = project.id
+    setTheme(project.theme ?? DEFAULT_THEME)
+  }, [project, setTheme])
 
   const persistTheme = useMutation({
     mutationFn: (t: Theme) => saveTheme({ data: { id, theme: t } }),
