@@ -21,9 +21,26 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
   const activeIdx = cues.findIndex((c) => currentTime >= c.start && currentTime <= c.end)
   const listRef = useRef<HTMLDivElement>(null)
 
+  /**
+   * Follow the playhead by scrolling THIS list only.
+   *
+   * scrollIntoView walks up and scrolls every scrollable ancestor including the
+   * document, so during playback each new cue dragged the whole page down and
+   * slid the video preview off the top of the screen. Setting scrollTop cannot
+   * escape the container.
+   */
   useEffect(() => {
-    if (activeIdx < 0) return
-    listRef.current?.querySelector(`[data-cue-index="${activeIdx}"]`)?.scrollIntoView({ block: 'nearest' })
+    const list = listRef.current
+    if (activeIdx < 0 || !list) return
+    const el = list.querySelector<HTMLElement>(`[data-cue-index="${activeIdx}"]`)
+    if (!el) return
+
+    const top = el.offsetTop
+    const bottom = top + el.offsetHeight
+    // Only move when the row has actually left the visible band, so a cue in
+    // the middle of the list does not cause a scroll on every word.
+    if (top < list.scrollTop) list.scrollTop = top
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight
   }, [activeIdx])
 
   if (cues.length === 0) {
@@ -31,7 +48,9 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
   }
 
   return (
-    <div ref={listRef} className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+    // relative so a row's offsetTop is measured against this list rather than
+    // some ancestor, which is what the scroll maths above assumes.
+    <div ref={listRef} className="relative max-h-[60vh] space-y-1 overflow-y-auto pr-1 xl:h-full xl:max-h-none">
       {cues.map((cue, i) => (
         <div
           key={cue.id}

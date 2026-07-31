@@ -188,7 +188,10 @@ function Editor() {
         </div>
       )}
 
-      <div className="flex-1 p-4 md:p-6">
+      {/* At xl the editor stops being a scrolling page: three columns, each
+          scrolling internally, so the preview never leaves the screen while it
+          plays. Narrower than that it stays a normal stacked page. */}
+      <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden">
       {project.status === 'error' && (
         <Card className="mb-6 border-destructive/40">
           <CardHeader>
@@ -217,10 +220,10 @@ function Editor() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[340px_1fr] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:grid-cols-[340px_minmax(0,1fr)_minmax(300px,360px)] xl:items-stretch">
         {/* Fixed-height so the panel's own footer pins the controls rather than
             the page scrolling them away. */}
-        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)]">
+        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:h-[calc(100dvh-6.5rem)] xl:static xl:row-span-1 xl:h-full">
           <StylePanel
             theme={theme}
             videoHeight={project.height ?? 1080}
@@ -235,7 +238,7 @@ function Editor() {
           />
         </Card>
 
-        <div className="space-y-6">
+        <div className="space-y-6 xl:min-h-0">
           {project.norm_url && project.width && project.height ? (
             <VideoPlayer
               key={project.norm_url}
@@ -253,12 +256,17 @@ function Editor() {
             </div>
           )}
 
-          <Tabs defaultValue="transcript">
+        </div>
+
+        <Tabs
+          defaultValue="transcript"
+          className="lg:col-start-2 xl:col-start-3 xl:row-start-1 xl:flex xl:min-h-0 xl:flex-col"
+        >
             <TabsList>
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="details">Details</TabsTrigger>
             </TabsList>
-            <TabsContent value="transcript" className="mt-4">
+            <TabsContent value="transcript" className="mt-4 xl:min-h-0 xl:flex-1">
               <TranscriptPanel
                 cues={project.cues}
                 currentTime={currentTime}
@@ -274,8 +282,7 @@ function Editor() {
               <p>Frame: {project.width && project.height ? `${project.width} x ${project.height}` : 'unknown'}</p>
               <p>Created: {new Date(project.created_at).toLocaleString()}</p>
             </TabsContent>
-          </Tabs>
-        </div>
+        </Tabs>
       </div>
       </div>
     </Shell>
