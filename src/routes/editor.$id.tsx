@@ -110,49 +110,51 @@ function Editor() {
   const exporting = job.data?.status === 'running'
 
   return (
-    <Shell>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button asChild size="icon" variant="ghost" aria-label="Back to projects">
-            <Link to="/dashboard/projects">
-              <ArrowLeft className="size-4" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
-            <div className="mt-1 flex items-center gap-2">
-              <StatusBadge status={project.status} />
-              {project.width && (
-                <span className="text-xs text-muted-foreground">
-                  {project.width} x {project.height}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className="flex min-h-dvh flex-col">
+      {/* Editor chrome, not page content: the actions stay reachable while the
+          preset list and the transcript scroll underneath. */}
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+        <Button asChild size="icon" variant="ghost" aria-label="Back to projects">
+          <Link to="/dashboard/projects">
+            <ArrowLeft className="size-4" />
+          </Link>
+        </Button>
 
-        <div className="flex items-center gap-2">
+        <h1 className="truncate text-sm font-medium">{project.name}</h1>
+        <StatusBadge status={project.status} />
+        {project.width && (
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            {project.width} x {project.height}
+          </span>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
           {project.export_url && (
-            <Button asChild variant="outline">
+            <Button asChild size="sm" variant="outline">
               <a href={project.export_url} download>
                 <Download className="size-4" />
                 Download
               </a>
             </Button>
           )}
-          <Button disabled={notReady || exporting || project.cues.length === 0} onClick={() => exportMutation.mutate()}>
+          <Button
+            size="sm"
+            disabled={notReady || exporting || project.cues.length === 0}
+            onClick={() => exportMutation.mutate()}
+          >
             {exporting ? <Loader2 className="size-4 animate-spin" /> : null}
             {exporting ? `Exporting ${job.data?.pct ?? 0}%` : 'Export MP4'}
           </Button>
         </div>
-      </div>
+      </header>
 
       {exporting && (
-        <div className="mb-6 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-1 w-full shrink-0 overflow-hidden bg-muted">
           <div className="h-full bg-foreground transition-[width]" style={{ width: `${job.data?.pct ?? 0}%` }} />
         </div>
       )}
 
+      <div className="flex-1 p-4 md:p-6">
       {project.status === 'error' && (
         <Card className="mb-6 border-destructive/40">
           <CardHeader>
@@ -182,25 +184,23 @@ function Editor() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="pt-6">
-              <StylePanel
-                theme={theme}
-                videoHeight={project.height ?? 1080}
-                onChange={(patch) => {
-                  patchTheme(patch)
-                  persistTheme.mutate({ ...theme, ...patch })
-                }}
-                onPreset={(t) => {
-                  setTheme(t)
-                  persistTheme.mutate(t)
-                }}
-              />
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[340px_1fr] lg:items-start">
+        {/* Fixed-height so the panel's own footer pins the controls rather than
+            the page scrolling them away. */}
+        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)]">
+          <StylePanel
+            theme={theme}
+            videoHeight={project.height ?? 1080}
+            onChange={(patch) => {
+              patchTheme(patch)
+              persistTheme.mutate({ ...theme, ...patch })
+            }}
+            onPreset={(t) => {
+              setTheme(t)
+              persistTheme.mutate(t)
+            }}
+          />
+        </Card>
 
         <div className="space-y-6">
           {project.norm_url && project.width && project.height ? (
@@ -244,7 +244,8 @@ function Editor() {
           </Tabs>
         </div>
       </div>
-    </Shell>
+      </div>
+    </div>
   )
 }
 

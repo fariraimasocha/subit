@@ -40,6 +40,16 @@ test('maxChars breaks before the word limit', () => {
   assert.ok(cues.length > 1)
 })
 
+/**
+ * The regression that put maxChars at 14: three short words can still be too
+ * wide to fit the frame in a display face, and WrapStyle 2 will not save us.
+ */
+test('a line that would overflow the frame gets split', () => {
+  const cues = groupWords(say('hello and welcome'))
+  assert.ok(cues.length > 1, 'HELLO AND WELCOME is 1144px wide on a 1080px frame')
+  assert.ok(cues.every((c) => c.words.map((w) => w.text).join(' ').length <= 14))
+})
+
 test('holds a cue into short silence but never past the next cue', () => {
   const words: Word[] = [
     { text: 'a.', start: 0, end: 0.2 },

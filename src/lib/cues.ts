@@ -18,9 +18,23 @@ export type GroupOpts = {
   holdGapMs?: number
 }
 
+/**
+ * maxChars is a proxy for line WIDTH, and 20 is too generous for the display
+ * faces this app ships. Measured in Anton at the Hormozi default (7.5% of a
+ * 1920 frame, so 144px): "HELLO AND WELCOME" is 17 characters and 1144px wide
+ * on a 1080px frame, so it clipped at both edges in the burn. Anton averages
+ * about 0.47em per character, giving roughly 14 characters inside a 90% safe
+ * width. WrapStyle 2 means ASS will not wrap for us, so the grouping has to
+ * keep lines short enough on its own.
+ *
+ * ponytail: a tuned constant, not per-font measurement at grouping time. Cues
+ * stay theme-independent, which is what lets you switch preset without
+ * re-transcribing. Ceiling: crank Font size past roughly 11% and long cues can
+ * still touch the edges.
+ */
 const DEFAULTS = {
   maxWords: 3,
-  maxChars: 20,
+  maxChars: 14,
   gapMs: 350,
   maxDurMs: 1800,
   holdMs: 140,
