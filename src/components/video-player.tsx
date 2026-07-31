@@ -31,6 +31,14 @@ const ASPECTS: { value: Aspect; label: string }[] = [
 const RATIOS: Record<Exclude<Aspect, 'source'>, number> = { '9:16': 9 / 16, '1:1': 1, '16:9': 16 / 9 }
 const SPEEDS = [0.5, 1, 1.5, 2]
 
+/**
+ * Everything stacked above and below the preview that also has to fit on
+ * screen: the editor header, the page padding, the frame control row, the
+ * transport row and the gaps between them. Overshooting only shrinks the
+ * preview slightly; undershooting pushes the transport off the bottom.
+ */
+const CHROME_PX = 230
+
 export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeChange }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [boxHeight, setBoxHeight] = useState(0)
@@ -87,7 +95,24 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
 
   return (
     <div className="space-y-3">
-      <div className="mx-auto w-full" style={{ maxWidth: ratio >= 1 ? '100%' : `${70 * ratio + 20}vh` }}>
+      {/*
+        The box is sized by capping its WIDTH, because aspect-ratio then derives
+        the height, and an over-tall preview is the failure mode that matters: a
+        9:16 clip is 1.78x taller than it is wide. width = height * ratio, so to
+        keep the height inside the viewport the width cap has to be the
+        available height times the ratio. Deriving the cap from a flat fraction
+        of vh instead gave a 9:16 box 105vh tall, pushing its own transport
+        controls off the bottom of the screen.
+      */}
+      <div
+        className="mx-auto w-full"
+        style={{
+          // The max() floor matters: below CHROME_PX of viewport the calc goes
+          // negative and the preview would collapse to nothing. Better to
+          // overflow and let the page scroll than to vanish.
+          maxWidth: `min(100%, max(220px, calc((100dvh - ${CHROME_PX}px) * ${ratio})))`,
+        }}
+      >
         <div
           ref={wrapRef}
           className="relative w-full overflow-hidden rounded-xl bg-black"
