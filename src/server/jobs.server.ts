@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { toAss } from '~/lib/ass.ts'
 import { groupWords } from '~/lib/cues.ts'
+import type { IngestStage } from '~/lib/project.ts'
 import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
 import { getProject, updateProject } from './d1.server.ts'
 import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, probe } from './ffmpeg.server.ts'
@@ -29,7 +30,8 @@ export async function runIngest(projectId: string) {
   try {
     const project = await getProject(projectId)
     if (!project) throw new Error('project not found')
-    await updateProject(projectId, { status: 'processing', error: null })
+    const stage = (s: IngestStage) => updateProject(projectId, { status: 'processing', error: null, stage: s })
+    await stage('normalising')
 
     // ffmpeg reads the R2 object over HTTPS directly, so there is no download
     // step and no source temp file.
@@ -41,6 +43,7 @@ export async function runIngest(projectId: string) {
     // transposed dimensions and every caption would land off frame.
     const meta = await probe(norm, dir)
 
+    await stage('uploading')
     const normKey = buildKey('norm', 'mp4')
     await putObject(normKey, await readFile(path.join(dir, norm)), 'video/mp4')
     const normUrl = await publicUrl(normKey)
@@ -53,17 +56,24 @@ export async function runIngest(projectId: string) {
       duration: meta.duration,
     })
 
-    const cues = (await hasAudio(norm, dir))
-      ? groupWords(await transcribe(norm, dir, meta.duration))
-      : []
+    await stage('transcribing')
+    const words = (await hasAudio(norm, dir)) ? await transcribe(norm, dir, meta.duration) : []
+
+    await stage('grouping')
+    const cues = groupWords(words)
 
     await updateProject(projectId, {
       status: 'ready',
+      stage: null,
       cues_json: JSON.stringify(cues),
       theme_json: project.theme ? JSON.stringify(project.theme) : JSON.stringify(DEFAULT_THEME),
     })
   } catch (e) {
-    await updateProject(projectId, { status: 'error', error: (e as Error).message.slice(0, 900) }).catch(() => {})
+    await updateProject(projectId, {
+      status: 'error',
+      // Keep the stage: it says which step failed, which is most of the triage.
+      error: (e as Error).message.slice(0, 900),
+    }).catch(() => {})
   } finally {
     await cleanJobDir(dir)
   }

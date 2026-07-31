@@ -30,6 +30,8 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {/* Two columns, not the reference's three: that grid exists to page
+            through ~30 presets, and at five it only truncates the names. */}
         <div className="grid grid-cols-2 gap-2">
           {THEMES.map((t) => (
             <button
@@ -38,7 +40,7 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
               onClick={() => onPreset(t)}
               aria-pressed={theme.id === t.id}
               className={cn(
-                'flex h-16 items-center justify-center rounded-lg border bg-neutral-900 px-2 transition-colors',
+                'flex h-14 items-center justify-center rounded-lg border bg-neutral-900 px-1.5 transition-colors',
                 theme.id === t.id
                   ? 'border-foreground ring-1 ring-foreground'
                   : 'border-border hover:border-foreground/40',
@@ -90,36 +92,50 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
         </div>
       </div>
 
+      {/* Two per row, so position and size sit side by side the way the whole
+          nudge loop actually gets used. */}
       <div className="shrink-0 space-y-3 border-t p-4">
-        <Field label="Caption position" value={`${theme.positionPct.toFixed(0)} %`}>
-          <Slider
-            min={5}
-            max={95}
-            step={1}
-            value={[theme.positionPct]}
-            onValueChange={([v]) => onChange({ positionPct: v })}
-          />
-        </Field>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <Field label="Position" value={`${theme.positionPct.toFixed(0)} %`}>
+            <Slider
+              min={5}
+              max={95}
+              step={1}
+              value={[theme.positionPct]}
+              onValueChange={([v]) => onChange({ positionPct: v })}
+            />
+          </Field>
 
-        <Field label="Font size" value={`${Math.round(m.fontPx)} px`}>
-          <Slider
-            min={2}
-            max={16}
-            step={0.1}
-            value={[theme.fontSizePct]}
-            onValueChange={([v]) => onChange({ fontSizePct: v })}
-          />
-        </Field>
+          <Field label="Font size" value={`${Math.round(m.fontPx)} px`}>
+            <Slider
+              min={2}
+              max={16}
+              step={0.1}
+              value={[theme.fontSizePct]}
+              onValueChange={([v]) => onChange({ fontSizePct: v })}
+            />
+          </Field>
 
-        <Field label="Outline" value={`${m.outlinePx.toFixed(1)} px`}>
-          <Slider
-            min={0}
-            max={2}
-            step={0.05}
-            value={[theme.outlinePct]}
-            onValueChange={([v]) => onChange({ outlinePct: v })}
-          />
-        </Field>
+          <Field label="Outline" value={`${m.outlinePx.toFixed(1)} px`}>
+            <Slider
+              min={0}
+              max={2}
+              step={0.05}
+              value={[theme.outlinePct]}
+              onValueChange={([v]) => onChange({ outlinePct: v })}
+            />
+          </Field>
+
+          <Field label="Shadow" value={`${m.shadowPx.toFixed(1)} px`}>
+            <Slider
+              min={0}
+              max={1.5}
+              step={0.05}
+              value={[theme.shadowPct]}
+              onValueChange={([v]) => onChange({ shadowPct: v })}
+            />
+          </Field>
+        </div>
 
         <div className="flex items-end gap-3 pt-1">
           <div className="min-w-0 flex-1 space-y-1.5">

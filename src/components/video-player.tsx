@@ -1,10 +1,13 @@
-import { Pause, Play, Subtitles } from 'lucide-react'
+import { ChevronDown, Eye, Maximize2, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CaptionOverlay } from '~/components/caption-overlay.tsx'
 import { Button } from '~/components/ui/button.tsx'
+import { Label } from '~/components/ui/label.tsx'
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover.tsx'
 import { Slider } from '~/components/ui/slider.tsx'
 import type { Cue } from '~/lib/cues.ts'
 import type { Theme } from '~/lib/theme.ts'
+import { cn } from '~/lib/utils.ts'
 import { useEditor, type Aspect } from '~/store/editor.ts'
 
 type Props = {
@@ -26,6 +29,7 @@ const ASPECTS: { value: Aspect; label: string }[] = [
 ]
 
 const RATIOS: Record<Exclude<Aspect, 'source'>, number> = { '9:16': 9 / 16, '1:1': 1, '16:9': 16 / 9 }
+const SPEEDS = [0.5, 1, 1.5, 2]
 
 export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeChange }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -33,6 +37,8 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [muted, setMuted] = useState(false)
+  const [speed, setSpeed] = useState(1)
   const { aspect, setAspect, captionsVisible, setCaptionsVisible } = useEditor()
 
   // Letterboxing would make the measured height wrong, so it is killed
@@ -71,6 +77,12 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
     }
   }, [onTimeChange])
 
+  const toggle = () => (videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause())
+  const seek = (t: number) => {
+    if (videoRef.current) videoRef.current.currentTime = t
+    setTime(t)
+  }
+
   const ratio = aspect === 'source' ? width / height : RATIOS[aspect]
 
   return (
@@ -87,7 +99,7 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
             playsInline
             className="block h-full w-full"
             style={{ objectFit: aspect === 'source' ? 'contain' : 'cover' }}
-            onClick={() => (videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause())}
+            onClick={toggle}
           />
           <CaptionOverlay
             videoRef={videoRef}
@@ -99,17 +111,96 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Frame controls: what the video looks like, not where it is playing. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <Menu label={aspect === 'source' ? 'Source' : aspect}>
+          {ASPECTS.map((a) => (
+            <MenuItem key={a.value} active={aspect === a.value} onClick={() => setAspect(a.value)}>
+              {a.label}
+            </MenuItem>
+          ))}
+        </Menu>
+
+        <Menu label={`${speed}x`}>
+          {SPEEDS.map((s) => (
+            <MenuItem
+              key={s}
+              active={speed === s}
+              onClick={() => {
+                setSpeed(s)
+                if (videoRef.current) videoRef.current.playbackRate = s
+              }}
+            >
+              {s}x
+            </MenuItem>
+          ))}
+        </Menu>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="ghost" className="gap-1.5">
+              <Eye className="size-4" />
+              Display
+              <ChevronDown className="size-3 opacity-60" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56">
+            <p className="mb-3 text-xs text-muted-foreground">Display</p>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="captions-toggle" className="cursor-pointer text-sm font-normal">
+                Captions
+              </Label>
+              <input
+                id="captions-toggle"
+                type="checkbox"
+                className="size-4 accent-foreground"
+                checked={captionsVisible}
+                onChange={(e) => setCaptionsVisible(e.target.checked)}
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+
         <Button
-          size="icon"
-          variant="secondary"
-          aria-label={playing ? 'Pause' : 'Play'}
-          onClick={() => (videoRef.current?.paused ? videoRef.current.play() : videoRef.current?.pause())}
+          size="sm"
+          variant="ghost"
+          className="gap-1.5"
+          onClick={() => seek(0)}
+          aria-label="Back to the start"
         >
+          <RotateCcw className="size-4" />
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={muted ? 'Unmute' : 'Mute'}
+          onClick={() => {
+            const next = !muted
+            setMuted(next)
+            if (videoRef.current) videoRef.current.muted = next
+          }}
+        >
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Fullscreen"
+          onClick={() => videoRef.current?.requestFullscreen?.()}
+        >
+          <Maximize2 className="size-4" />
+        </Button>
+      </div>
+
+      {/* Transport: play head and time. */}
+      <div className="flex items-center gap-3">
+        <Button size="icon" variant="secondary" aria-label={playing ? 'Pause' : 'Play'} onClick={toggle}>
           {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
         </Button>
 
-        <span className="w-24 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
           {fmt(time)} / {fmt(duration)}
         </span>
 
@@ -119,40 +210,57 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
           max={Math.max(duration, 0.1)}
           step={0.01}
           value={[time]}
-          onValueChange={([v]) => {
-            if (videoRef.current) videoRef.current.currentTime = v
-            setTime(v)
-          }}
+          onValueChange={([v]) => seek(v)}
         />
-
-        <Button
-          size="icon"
-          variant={captionsVisible ? 'secondary' : 'ghost'}
-          aria-label="Toggle captions"
-          aria-pressed={captionsVisible}
-          onClick={() => setCaptionsVisible(!captionsVisible)}
-        >
-          <Subtitles className="size-4" />
-        </Button>
-      </div>
-
-      <div className="flex gap-1">
-        {ASPECTS.map((a) => (
-          <Button
-            key={a.value}
-            size="sm"
-            variant={aspect === a.value ? 'secondary' : 'ghost'}
-            onClick={() => setAspect(a.value)}
-          >
-            {a.label}
-          </Button>
-        ))}
       </div>
     </div>
   )
 }
 
+function Menu({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="gap-1.5">
+          {label}
+          <ChevronDown className="size-3 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-32 p-1">
+        {children}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function MenuItem({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+        active && 'font-medium',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** m:ss.cc, matching the precision the transcript panel edits at. */
 function fmt(s: number) {
-  if (!Number.isFinite(s)) return '0:00'
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+  if (!Number.isFinite(s)) return '0:00.00'
+  const m = Math.floor(s / 60)
+  const sec = Math.floor(s % 60)
+  const cs = Math.floor((s % 1) * 100)
+  return `${m}:${String(sec).padStart(2, '0')}.${String(cs).padStart(2, '0')}`
 }

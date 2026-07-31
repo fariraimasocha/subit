@@ -7,6 +7,20 @@ import type { Theme } from './theme.ts'
  */
 export type ProjectStatus = 'uploaded' | 'processing' | 'ready' | 'exporting' | 'done' | 'error'
 
+/**
+ * Ingest is four slow steps behind one status, and a normalise on a long video
+ * can sit there for minutes. Naming the current step is the difference between
+ * "it is working" and "it is stuck".
+ */
+export const INGEST_STAGES = [
+  { id: 'normalising', label: 'Normalising the video' },
+  { id: 'uploading', label: 'Preparing the preview' },
+  { id: 'transcribing', label: 'Transcribing with Whisper' },
+  { id: 'grouping', label: 'Grouping into caption cues' },
+] as const
+
+export type IngestStage = (typeof INGEST_STAGES)[number]['id']
+
 export type ProjectRow = {
   id: string
   name: string
@@ -22,6 +36,8 @@ export type ProjectRow = {
   export_url: string | null
   error: string | null
   created_at: number
+  /** Which INGEST_STAGES entry is in flight. Null once the job settles. */
+  stage: IngestStage | null
 }
 
 /** The row with the two JSON columns parsed. What every route actually wants. */

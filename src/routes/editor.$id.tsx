@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Download, Loader2, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import { IngestProgress } from '~/components/ingest-progress.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { StylePanel } from '~/components/style-panel.tsx'
 import { TranscriptPanel } from '~/components/transcript-panel.tsx'
@@ -161,7 +162,8 @@ function Editor() {
             <CardTitle className="text-base">Processing failed</CardTitle>
             <CardDescription className="font-mono text-xs break-all">{project.error}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <IngestProgress stage={project.stage} failed />
             <Button variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
               <RotateCw className="size-4" />
               Retry
@@ -173,14 +175,12 @@ function Editor() {
       {notReady && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Loader2 className="size-4 animate-spin" />
-              Transcribing
-            </CardTitle>
-            <CardDescription>
-              Normalising the video and running it through Whisper. This page updates itself.
-            </CardDescription>
+            <CardTitle className="text-base">Subit is working on your video</CardTitle>
+            <CardDescription>This page updates itself, no need to reload.</CardDescription>
           </CardHeader>
+          <CardContent>
+            <IngestProgress stage={project.stage} />
+          </CardContent>
         </Card>
       )}
 
