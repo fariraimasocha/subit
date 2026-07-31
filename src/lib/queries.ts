@@ -39,4 +39,8 @@ export const projectQuery = (id: string, enabled = true) =>
     // poll until it settles. Everything else is static until the user edits it.
     refetchInterval: (q) =>
       q.state.data?.status === 'processing' || q.state.data?.status === 'uploaded' ? 2000 : false,
+    // Ingest is a detached server job, and people leave it running in another
+    // tab. Without this the interval only ticks while the window is focused, so
+    // the page sits on "Transcribing" until they come back and look at it.
+    refetchIntervalInBackground: true,
   })

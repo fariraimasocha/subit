@@ -82,6 +82,21 @@ export async function putObject(key: string, body: Uint8Array | ArrayBuffer, con
   return key
 }
 
+/**
+ * Recover the object key from a stored URL. export_url is presigned or public
+ * depending on config, so the key has to come back out of the path.
+ */
+export function exportKeyOf(url: string | null) {
+  if (!url) return null
+  try {
+    const path = new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
+    const i = path.indexOf('export')
+    return i >= 0 ? path.slice(i).join('/') : null
+  } catch {
+    return null
+  }
+}
+
 export async function deleteObject(key: string) {
   assertConfigured()
   const res = await aws().fetch(objectUrl(key), { method: 'DELETE' })
@@ -95,6 +110,16 @@ export async function deleteObject(key: string) {
  */
 export async function publicUrl(key: string) {
   const base = (process.env.R2_PUBLIC_URL ?? '').replace(/\/$/, '')
+  // The S3 API endpoint is the obvious thing to paste here and it can never
+  // work: every request needs a SigV4 signature, so the browser just gets a
+  // 400 and the editor shows a dead <video>. Ignore it rather than store a URL
+  // that is broken for as long as the project row lives.
+  if (base && base.includes('.r2.cloudflarestorage.com')) {
+    console.warn(
+      'R2_PUBLIC_URL points at the S3 API endpoint, which requires signing. Ignoring it and using a presigned GET. Set it to an https://pub-xxxx.r2.dev URL or a custom domain, or leave it blank.',
+    )
+    return presignGetUrl(key, 60 * 60 * 24 * 7)
+  }
   if (base) return `${base}/${key}`
   return presignGetUrl(key, 60 * 60 * 24 * 7)
 }

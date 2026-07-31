@@ -6,7 +6,7 @@ import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
 import { getProject, updateProject } from './d1.server.ts'
 import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, probe } from './ffmpeg.server.ts'
 import { transcribe } from './groq.server.ts'
-import { buildKey, presignGetUrl, publicUrl, putObject } from './r2.server.ts'
+import { buildKey, deleteObject, exportKeyOf, presignGetUrl, publicUrl, putObject } from './r2.server.ts'
 
 /**
  * ponytail: in-memory Map. Ceiling: single process, single machine. Restart the
@@ -107,6 +107,12 @@ export async function runExport(projectId: string, jobId: string) {
 
     await updateProject(projectId, { status: 'done', export_url: url })
     jobs.set(jobId, { status: 'done', pct: 100, url })
+
+    // Tweaking a style and exporting again is the normal loop here, so without
+    // this every re-export leaves its predecessor in the bucket forever. Done
+    // only after the new row is written, so a failure never loses both.
+    const stale = exportKeyOf(project.export_url)
+    if (stale && stale !== key) await deleteObject(stale).catch(() => {})
   } catch (e) {
     const message = (e as Error).message.slice(0, 900)
     jobs.set(jobId, { status: 'error', pct: 0, error: message })

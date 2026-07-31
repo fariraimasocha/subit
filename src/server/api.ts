@@ -5,7 +5,7 @@ import type { Theme } from '~/lib/theme.ts'
 import { createProject, deleteProject, getProject, listProjects } from './d1.server.ts'
 import type { Project } from '~/lib/project.ts'
 import { jobs, runExport, runIngest } from './jobs.server.ts'
-import { buildKey, deleteObject, presignPutUrl, r2Configured } from './r2.server.ts'
+import { buildKey, deleteObject, exportKeyOf, presignPutUrl, r2Configured } from './r2.server.ts'
 import { d1Configured } from './d1.server.ts'
 import { groqConfigured } from './groq.server.ts'
 import { updateProject } from './d1.server.ts'
@@ -148,7 +148,17 @@ export const retryIngest = createServerFn({ method: 'POST' })
 export const deleteProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }) => {
+    // Read the keys before dropping the row, or the objects become unreachable
+    // and sit in the bucket forever. The keys come from the row rather than the
+    // caller, so this cannot be pointed at someone else's object.
+    const project = await getProject(data.id)
     await deleteProject(data.id)
+    if (project) {
+      const keys = [project.src_key, project.norm_key, exportKeyOf(project.export_url)]
+      // Best effort: the row is already gone, so a failed delete must not turn
+      // into an error the user can do anything about. Worst case is an orphan.
+      await Promise.all(keys.filter((k): k is string => Boolean(k)).map((k) => deleteObject(k).catch(() => {})))
+    }
     return { ok: true }
   })
 

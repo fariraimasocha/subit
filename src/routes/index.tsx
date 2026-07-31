@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { Captions } from 'lucide-react'
 import { Button } from '~/components/ui/button.tsx'
 import { THEMES } from '~/lib/theme.ts'
 
@@ -8,7 +9,10 @@ function Landing() {
   return (
     <main className="min-h-dvh bg-background">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-        <span className="text-lg font-semibold tracking-tight">Subit</span>
+        <span className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <Captions className="size-5" />
+          Subit
+        </span>
         <Button asChild size="sm">
           <Link to="/dashboard">Open dashboard</Link>
         </Button>

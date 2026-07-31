@@ -84,6 +84,9 @@ function Editor() {
     queryFn: () => getJob({ data: { jobId: jobId! } }),
     enabled: Boolean(jobId),
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 750 : false),
+    // Same reason as the project poll: the burn runs server side regardless of
+    // whether this tab is the focused one.
+    refetchIntervalInBackground: true,
   })
 
   useEffect(() => {
