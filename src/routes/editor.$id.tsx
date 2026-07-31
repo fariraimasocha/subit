@@ -220,10 +220,10 @@ function Editor() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:grid-cols-[340px_minmax(0,1fr)_minmax(300px,360px)] xl:items-stretch">
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:min-h-0 xl:grid-cols-[340px_minmax(0,1fr)_minmax(300px,360px)] xl:grid-rows-[minmax(0,1fr)] xl:items-stretch">
         {/* Fixed-height so the panel's own footer pins the controls rather than
             the page scrolling them away. */}
-        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:h-[calc(100dvh-6.5rem)] xl:static xl:row-span-1 xl:h-full">
+        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:h-[calc(100dvh_-_6.5rem)] xl:static xl:row-span-1 xl:h-full xl:min-h-0">
           <StylePanel
             theme={theme}
             videoHeight={project.height ?? 1080}
@@ -297,7 +297,16 @@ function Pad({ children }: { children: React.ReactNode }) {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarShell>
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      {/*
+        h-dvh, not flex-1: a flex item's `flex-basis: 0%` overrides `height`, so
+        the viewport boundary has to be a real height here. Without it every
+        `h-full` below resolves against an auto-sized row and the columns just
+        grow to fit their content, which is how the style panel's pinned footer
+        ended up below the fold once there were eighteen presets.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col xl:h-dvh xl:flex-none xl:overflow-hidden">
+        {children}
+      </div>
     </SidebarShell>
   )
 }
