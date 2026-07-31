@@ -64,9 +64,16 @@ function rememberKey(key: string) {
   issuedKeys.set(key, Date.now())
 }
 
-/** True only once per key, so a key cannot be replayed to force a second delete. */
+/**
+ * True only once per key, so a key cannot be replayed to force a second delete.
+ * Expiry is enforced here rather than left to the next rememberKey call, or a
+ * quiet server would keep hour-old keys claimable indefinitely.
+ */
 function claimKey(key: string) {
-  return issuedKeys.delete(key)
+  const issued = issuedKeys.get(key)
+  if (issued === undefined) return false
+  issuedKeys.delete(key)
+  return Date.now() - issued < KEY_TTL_MS
 }
 
 export const presign = createServerFn({ method: 'POST' })
