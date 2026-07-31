@@ -5,12 +5,51 @@ import type { Theme } from '~/lib/theme.ts'
 import { createProject, deleteProject, getProject, listProjects } from './d1.server.ts'
 import type { Project } from '~/lib/project.ts'
 import { jobs, runExport, runIngest } from './jobs.server.ts'
-import { buildKey, deleteObject, exportKeyOf, presignPutUrl, r2Configured } from './r2.server.ts'
+import { buildKey, deleteObject, exportKeyOf, presignDownloadUrl, presignPutUrl, r2Configured } from './r2.server.ts'
 import { d1Configured } from './d1.server.ts'
 import { groqConfigured } from './groq.server.ts'
 import { updateProject } from './d1.server.ts'
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+
+/**
+ * Star count for the landing page.
+ *
+ * Cached in memory because unauthenticated GitHub allows 60 requests an hour
+ * per IP, and a landing page that fetched on every view would rate-limit itself
+ * within a minute of any traffic. Failure is not an error worth showing: the
+ * link still works without a number next to it.
+ *
+ * ponytail: module-level cache, same ceiling as the jobs Map. Set GITHUB_REPO
+ * to point it somewhere else.
+ */
+const STARS_TTL_MS = 10 * 60 * 1000
+let starsCache: { at: number; count: number | null } | null = null
+
+export const getStars = createServerFn({ method: 'GET' }).handler(async () => {
+  const repo = process.env.GITHUB_REPO || 'fariraimasocha/subit'
+  if (starsCache && Date.now() - starsCache.at < STARS_TTL_MS) {
+    return { repo, count: starsCache.count }
+  }
+  let count: number | null = null
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        'user-agent': 'subit',
+        // Lifts the limit to 5000/hour when a token happens to be around.
+        ...(process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+      },
+      signal: AbortSignal.timeout(4000),
+    })
+    if (res.ok) count = (await res.json() as { stargazers_count?: number }).stargazers_count ?? null
+  } catch {
+    count = null
+  }
+  // Cache misses too, so a 404 or an outage does not retry on every render.
+  starsCache = { at: Date.now(), count }
+  return { repo, count }
+})
 
 const wordSchema = z.object({ text: z.string(), start: z.number(), end: z.number() })
 const cueSchema = z.object({
@@ -160,6 +199,20 @@ export const deleteProjectFn = createServerFn({ method: 'POST' })
       await Promise.all(keys.filter((k): k is string => Boolean(k)).map((k) => deleteObject(k).catch(() => {})))
     }
     return { ok: true }
+  })
+
+/**
+ * A fresh presigned URL that forces a save rather than a tab navigation. Signed
+ * on demand rather than stored, so it cannot go stale like export_url can.
+ */
+export const getDownloadUrl = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const project = await getProject(data.id)
+    const key = exportKeyOf(project?.export_url ?? null)
+    if (!project || !key) throw new Error('This project has not been exported yet')
+    const name = project.name.replace(/[^\w. -]+/g, '').trim() || 'subit'
+    return { url: await presignDownloadUrl(key, `${name}.mp4`) }
   })
 
 export const startExport = createServerFn({ method: 'POST' })

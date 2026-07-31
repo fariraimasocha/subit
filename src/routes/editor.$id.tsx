@@ -18,7 +18,7 @@ import type { Cue } from '~/lib/cues.ts'
 import { projectQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
 import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
-import { getJob, retryIngest, saveCues, saveTheme, startExport } from '~/server/api.ts'
+import { getDownloadUrl, getJob, retryIngest, saveCues, saveTheme, startExport } from '~/server/api.ts'
 import { useEditor } from '~/store/editor.ts'
 
 export const Route = createFileRoute('/editor/$id')({ component: Editor })
@@ -68,6 +68,16 @@ function Editor() {
     },
     onError: (e) => toast.error((e as Error).message),
     onSuccess: ({ jobId }) => setJobId(jobId),
+  })
+
+  const download = useMutation({
+    mutationFn: () => getDownloadUrl({ data: { id } }),
+    onError: (e) => toast.error((e as Error).message),
+    // Navigating to a URL whose response says `attachment` downloads it without
+    // leaving the editor, which an <a download> cannot do across origins.
+    onSuccess: ({ url }) => {
+      window.location.href = url
+    },
   })
 
   const retry = useMutation({
@@ -141,6 +151,10 @@ function Editor() {
 
   const notReady = project.status === 'uploaded' || project.status === 'processing'
   const exporting = job.data?.status === 'running'
+  // The job map is in memory, so a server restart mid-burn leaves the row stuck
+  // on `exporting` with nothing running. Say so instead of showing a badge that
+  // implies work is still happening.
+  const exportStalled = project.status === 'exporting' && !exporting && !jobId
 
   return (
     <Shell>
@@ -164,11 +178,9 @@ function Editor() {
 
         <div className="ml-auto flex items-center gap-2">
           {project.export_url && (
-            <Button asChild size="sm" variant="outline">
-              <a href={project.export_url} download>
-                <Download className="size-4" />
-                Download
-              </a>
+            <Button size="sm" variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
+              <Download className="size-4" />
+              {download.isPending ? 'Preparing' : 'Download'}
             </Button>
           )}
           <Button
@@ -192,8 +204,20 @@ function Editor() {
           scrolling internally, so the preview never leaves the screen while it
           plays. Narrower than that it stays a normal stacked page. */}
       <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden">
+      {exportStalled && (
+        <Card className="mb-6 overflow-hidden border-l-4 border-l-amber-500">
+          <CardHeader>
+            <CardTitle className="text-base">That export did not finish</CardTitle>
+            <CardDescription>
+              The render job is gone, usually because the server restarted while it was working.
+              Nothing is lost, press Export MP4 to run it again.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
       {project.status === 'error' && (
-        <Card className="mb-6 border-destructive/40">
+        <Card className="mb-6 overflow-hidden border-l-4 border-l-destructive">
           <CardHeader>
             <CardTitle className="text-base">Processing failed</CardTitle>
             <CardDescription className="font-mono text-xs break-all">{project.error}</CardDescription>
@@ -209,7 +233,7 @@ function Editor() {
       )}
 
       {notReady && (
-        <Card className="mb-6">
+        <Card className="mb-6 overflow-hidden border-l-4 border-l-blue-500">
           <CardHeader>
             <CardTitle className="text-base">Subit is working on your video</CardTitle>
             <CardDescription>This page updates itself, no need to reload.</CardDescription>

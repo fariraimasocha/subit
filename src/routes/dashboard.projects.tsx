@@ -9,12 +9,12 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table'
-import { Trash2 } from 'lucide-react'
+import { Clapperboard, Trash2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { Button } from '~/components/ui/button.tsx'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
+import { Card, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
 import {
   Dialog,
@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import type { Project } from '~/lib/project.ts'
 import { projectsQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
+import { EmptyState } from '~/components/empty-state.tsx'
 import { deleteProjectFn } from '~/server/api.ts'
 
 export const Route = createFileRoute('/dashboard/projects')({ component: Projects })
@@ -128,6 +129,22 @@ function Projects() {
         <SetupNotice config={config} />
       ) : isPending ? (
         <Skeleton className="h-64 rounded-xl" />
+      ) : table.getRowModel().rows.length === 0 ? (
+        // Headers, sort handles and pagination for nothing at all read as a
+        // broken page, so the whole table goes and the space explains itself.
+        <EmptyState
+          icon={Clapperboard}
+          title="No projects yet"
+          body="Once you upload a video it lands here with its status, length and cue count, ready to open in the editor."
+          action={
+            <Button asChild size="lg">
+              <Link to="/dashboard/new">
+                <Upload className="size-4" />
+                Upload a video
+              </Link>
+            </Button>
+          }
+        />
       ) : (
         <>
           <div className="rounded-xl border">
@@ -149,16 +166,6 @@ function Projects() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-32 text-center text-muted-foreground">
-                      No projects yet.{' '}
-                      <Link to="/dashboard/new" className="underline">
-                        Upload one
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                )}
                 {table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id}>
                     {row.getVisibleCells().map((cell) => (

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Captions } from 'lucide-react'
+import { GitHubStars } from '~/components/github-stars.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { THEMES } from '~/lib/theme.ts'
 
@@ -13,9 +14,12 @@ function Landing() {
           <Captions className="size-5" />
           Subit
         </span>
-        <Button asChild size="sm">
-          <Link to="/dashboard">Open dashboard</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <GitHubStars />
+          <Button asChild size="sm">
+            <Link to="/dashboard">Open dashboard</Link>
+          </Button>
+        </div>
       </header>
 
       <section className="mx-auto max-w-3xl px-6 pt-16 pb-10 text-center">

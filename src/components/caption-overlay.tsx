@@ -33,7 +33,6 @@ export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible }: Pr
       return
     }
 
-    const m = metrics(theme, boxHeight)
     let raf = 0
 
     const tick = () => {

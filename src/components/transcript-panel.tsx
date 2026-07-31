@@ -1,8 +1,9 @@
-import { Scissors, Merge } from 'lucide-react'
+import { Captions, Merge, Scissors } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '~/components/ui/button.tsx'
 import { Input } from '~/components/ui/input.tsx'
 import { editWord, mergeCues, retime, splitCue, type Cue } from '~/lib/cues.ts'
+import { EmptyState } from '~/components/empty-state.tsx'
 import { cn } from '~/lib/utils.ts'
 
 type Props = {
@@ -44,7 +45,14 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
   }, [activeIdx])
 
   if (cues.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No transcript yet.</p>
+    return (
+      <EmptyState
+        icon={Captions}
+        title="No transcript yet"
+        body="Cues appear here once transcription finishes. You can then fix any misheard word, split a cue or nudge its timing."
+        className="py-10"
+      />
+    )
   }
 
   return (

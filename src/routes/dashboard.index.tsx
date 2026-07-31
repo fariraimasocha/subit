@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Upload } from 'lucide-react'
+import { Upload, Clapperboard } from 'lucide-react'
 import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { projectsQuery, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
+import { EmptyState } from '~/components/empty-state.tsx'
 
 export const Route = createFileRoute('/dashboard/')({ component: DashboardHome })
 
@@ -50,19 +51,19 @@ function DashboardHome() {
       )}
 
       {ready && !isPending && !error && recent.length === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Nothing here yet</CardTitle>
-            <CardDescription>
-              Upload your first video and Subit will transcribe it and cut it into caption cues.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link to="/dashboard/new">Upload a video</Link>
+        <EmptyState
+          icon={Clapperboard}
+          title="Add your first video"
+          body="Drop in an MP4 or MOV. Subit transcribes it with word level timing, cuts it into short cues, and burns them straight into the picture."
+          action={
+            <Button asChild size="lg">
+              <Link to="/dashboard/new">
+                <Upload className="size-4" />
+                Upload a video
+              </Link>
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

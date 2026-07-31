@@ -71,6 +71,26 @@ export async function presignGetUrl(key: string, expires = 21600) {
   return signed.url
 }
 
+/**
+ * A presigned GET that the browser will save rather than play.
+ *
+ * The `download` attribute on an <a> is ignored for cross-origin URLs, so
+ * linking straight at R2 just navigates the tab to the video. Signing
+ * response-content-disposition into the query makes R2 send the attachment
+ * header itself, which no origin rule can override.
+ */
+export async function presignDownloadUrl(key: string, filename: string, expires = 3600) {
+  assertConfigured()
+  // Quotes and backslashes would terminate the header value early.
+  const safe = filename.replace(/["\\]/g, '').slice(0, 120) || 'subit.mp4'
+  const disposition = `attachment; filename="${safe}"`
+  const url = new URL(objectUrl(key))
+  url.searchParams.set('X-Amz-Expires', String(expires))
+  url.searchParams.set('response-content-disposition', disposition)
+  const signed = await aws().sign(new Request(url, { method: 'GET' }), { aws: { signQuery: true } })
+  return signed.url
+}
+
 export async function putObject(key: string, body: Uint8Array | ArrayBuffer, contentType: string) {
   assertConfigured()
   const res = await aws().fetch(objectUrl(key), {

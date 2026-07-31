@@ -1,3 +1,4 @@
+import { CheckCircle2, Circle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 
 /**
@@ -12,7 +13,9 @@ export function SetupNotice({ config }: { config?: { r2: boolean; d1: boolean; g
   ] as const
 
   return (
-    <Card>
+    // A left accent stripe marks this as a callout rather than another panel,
+    // and costs one border instead of a whole decorated container.
+    <Card className="overflow-hidden border-l-4 border-l-amber-500">
       <CardHeader>
         <CardTitle className="text-base">Finish the setup first</CardTitle>
         <CardDescription>
@@ -21,9 +24,15 @@ export function SetupNotice({ config }: { config?: { r2: boolean; d1: boolean; g
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
+        {/* Icons rather than the words "set" and "todo": the state is scannable
+            down the column without reading it. */}
         {rows.map(([name, ok, hint]) => (
           <div key={name} className="flex items-start gap-3 text-sm">
-            <span className={ok ? 'text-emerald-400' : 'text-amber-400'}>{ok ? 'set' : 'todo'}</span>
+            {ok ? (
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+            ) : (
+              <Circle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+            )}
             <span className="w-12 shrink-0 font-medium">{name}</span>
             <span className="text-muted-foreground">{hint}</span>
           </div>

@@ -1,6 +1,7 @@
 import { Label } from '~/components/ui/label.tsx'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select.tsx'
 import { Slider } from '~/components/ui/slider.tsx'
+import { Switch } from '~/components/ui/switch.tsx'
 import { FONTS, metrics, THEMES, type Theme } from '~/lib/theme.ts'
 import { cn } from '~/lib/utils.ts'
 
@@ -67,29 +68,27 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
           ))}
         </div>
 
-        <div className="mt-6 space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-3">
+        {/* Spacing separates these from the grid, so they need no boxes of their
+            own. A bordered row around a switch is two separators doing one job. */}
+        <div className="mt-6 space-y-1">
+          <div className="flex items-center justify-between py-1.5">
             <Label htmlFor="uppercase" className="cursor-pointer text-sm font-normal">
               Uppercase
             </Label>
-            <input
+            <Switch
               id="uppercase"
-              type="checkbox"
-              className="size-4 accent-foreground"
               checked={theme.uppercase}
-              onChange={(e) => onChange({ uppercase: e.target.checked })}
+              onCheckedChange={(v) => onChange({ uppercase: v })}
             />
           </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className="flex items-center justify-between py-1.5">
             <Label htmlFor="box" className="cursor-pointer text-sm font-normal">
               Background box
             </Label>
-            <input
+            <Switch
               id="box"
-              type="checkbox"
-              className="size-4 accent-foreground"
               checked={theme.boxColor !== null}
-              onChange={(e) => onChange({ boxColor: e.target.checked ? '#000000' : null })}
+              onCheckedChange={(v) => onChange({ boxColor: v ? '#000000' : null })}
             />
           </div>
         </div>

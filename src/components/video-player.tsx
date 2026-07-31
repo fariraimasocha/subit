@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button.tsx'
 import { Label } from '~/components/ui/label.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover.tsx'
 import { Slider } from '~/components/ui/slider.tsx'
+import { Switch } from '~/components/ui/switch.tsx'
 import type { Cue } from '~/lib/cues.ts'
 import type { Theme } from '~/lib/theme.ts'
 import { cn } from '~/lib/utils.ts'
@@ -175,13 +176,7 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
               <Label htmlFor="captions-toggle" className="cursor-pointer text-sm font-normal">
                 Captions
               </Label>
-              <input
-                id="captions-toggle"
-                type="checkbox"
-                className="size-4 accent-foreground"
-                checked={captionsVisible}
-                onChange={(e) => setCaptionsVisible(e.target.checked)}
-              />
+              <Switch id="captions-toggle" checked={captionsVisible} onCheckedChange={setCaptionsVisible} />
             </div>
           </PopoverContent>
         </Popover>
