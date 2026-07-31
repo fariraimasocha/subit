@@ -23,7 +23,10 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
   const m = metrics(theme, videoHeight || 1080)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // flex-1 rather than h-full: the Card is capped by max-height with an auto
+    // height, and a percentage height against an auto parent resolves to auto, so
+    // h-full would let the panel overflow the cap instead of scrolling inside it.
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h2 className="text-sm font-medium">Caption style</h2>
         <span className="text-xs text-muted-foreground">{theme.name}</span>

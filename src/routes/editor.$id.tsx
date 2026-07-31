@@ -223,7 +223,11 @@ function Editor() {
       <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:min-h-0 xl:grid-cols-[340px_minmax(0,1fr)_minmax(300px,360px)] xl:grid-rows-[minmax(0,1fr)] xl:items-stretch">
         {/* Fixed-height so the panel's own footer pins the controls rather than
             the page scrolling them away. */}
-        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:h-[calc(100dvh_-_6.5rem)] xl:static xl:row-span-1 xl:h-full xl:min-h-0">
+        {/* max-h, not h: forcing full height leaves dead space between the last
+            toggle and the pinned footer whenever the presets do not fill the
+            column. Capping instead lets the panel shrink to its content and
+            only pin once the list actually overflows. */}
+        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:max-h-[calc(100dvh_-_6.5rem)] xl:static xl:row-span-1 xl:max-h-full xl:min-h-0 xl:self-start">
           <StylePanel
             theme={theme}
             videoHeight={project.height ?? 1080}
