@@ -7,12 +7,12 @@ import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
-import { createProjectFn, discardUpload, presign } from '~/server/api.ts'
+import { createProjectFn, presign } from '~/server/api.ts'
 
 export const Route = createFileRoute('/dashboard/new')({ component: NewProject })
 
-const ACCEPT = '.mp4,.mov,.m4v,video/mp4,video/quicktime'
-const EXTS = ['mp4', 'mov', 'm4v']
+const ACCEPT = '.mp4,.mov,video/mp4,video/quicktime'
+const EXTS = ['mp4', 'mov']
 
 /** The dropzone bypasses the input's `accept`, so it has to check for itself. */
 const accepted = (f: File) => EXTS.includes(f.name.split('.').pop()?.toLowerCase() ?? '')
@@ -54,14 +54,8 @@ function NewProject() {
         },
       })
       await putWithProgress(url, file, setPct)
-      try {
-        return await createProjectFn({ data: { name: file.name.replace(/\.[^.]+$/, ''), srcKey: key } })
-      } catch (e) {
-        // The object is uploaded but nothing references it, so bin it before
-        // rethrowing rather than leaving gigabytes of orphan in the bucket.
-        await discardUpload({ data: { key } }).catch(() => {})
-        throw e
-      }
+      // createProjectFn bins the object itself if the row cannot be written.
+      return createProjectFn({ data: { name: file.name.replace(/\.[^.]+$/, ''), srcKey: key } })
     },
     onError: (e) => {
       setPct(null)

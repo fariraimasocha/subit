@@ -55,29 +55,28 @@ export const presign = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ext = data.filename.split('.').pop()?.toLowerCase() ?? 'mp4'
-    if (!['mp4', 'mov', 'm4v', 'webm'].includes(ext)) throw new Error('Only MP4 and MOV files are supported')
+    if (!['mp4', 'mov'].includes(ext)) throw new Error('Only MP4 and MOV files are supported')
     const key = buildKey('src', ext)
     const url = await presignPutUrl(key, data.contentType, data.size)
     return { key, url }
-  })
-
-/**
- * Drops an uploaded object whose project row was never created. Without it a
- * failed createProjectFn leaves a multi-gigabyte orphan in the bucket that
- * nothing will ever reference or clean up.
- */
-export const discardUpload = createServerFn({ method: 'POST' })
-  .validator(z.object({ key: z.string().min(1) }))
-  .handler(async ({ data }) => {
-    await deleteObject(data.key)
-    return { ok: true }
   })
 
 export const createProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ name: z.string().min(1).max(200), srcKey: z.string().min(1) }))
   .handler(async ({ data }) => {
     const id = crypto.randomUUID()
-    await createProject(id, data.name, data.srcKey)
+    try {
+      await createProject(id, data.name, data.srcKey)
+    } catch (e) {
+      // The object is uploaded but no row will ever reference it, so bin it
+      // here rather than exposing a delete-by-key endpoint. With no auth in
+      // this app that endpoint would let anyone delete any object in the
+      // bucket, and the keys are visible in every norm_url and export_url.
+      // ponytail: this does not cover the browser dying between the PUT and
+      // this call. That orphan needs a reaper, which is the queue we said no to.
+      await deleteObject(data.srcKey).catch(() => {})
+      throw e
+    }
     // Detached on purpose. Long-lived Node process only, see runIngest.
     void runIngest(id)
     return { id }
