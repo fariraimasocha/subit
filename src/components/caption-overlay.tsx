@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import type { Cue } from '~/lib/cues.ts'
 import { metrics, type Theme } from '~/lib/theme.ts'
+import { useEditor } from '~/store/editor.ts'
 
 type Props = {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -9,6 +10,8 @@ type Props = {
   /** True painted height of the video box, from a ResizeObserver on the wrapper. */
   boxHeight: number
   visible: boolean
+  /** Persist the dragged position. Omit to make the caption undraggable. */
+  onCommit?: (pct: number) => void
 }
 
 /**
@@ -18,10 +21,15 @@ type Props = {
  * Driven by requestAnimationFrame, not `timeupdate`, which fires roughly four
  * times a second and would visibly lag the word highlight.
  */
-export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible }: Props) {
+export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible, onCommit }: Props) {
   const layerRef = useRef<HTMLDivElement>(null)
   const cursor = useRef(0)
   const painted = useRef(-1)
+  const patchTheme = useEditor((s) => s.patchTheme)
+  // Everything the drag needs, resolved once on pointerdown. `offset` keeps the
+  // grab point under the cursor so the block does not jump to it. `id` is what
+  // stops a second finger landing on the caption from hijacking the first one.
+  const drag = useRef<{ id: number; box: DOMRect; offset: number; pct: number } | null>(null)
 
   useEffect(() => {
     painted.current = -1
@@ -80,6 +88,39 @@ export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible }: Pr
   }, [cues, theme, boxHeight, visible, videoRef])
 
   const m = metrics(theme, boxHeight)
+  const draggable = Boolean(onCommit) && visible
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Left button only: a right click here would otherwise start a drag the
+    // context menu then leaves stranded.
+    if (!draggable || drag.current || e.button !== 0) return
+    const block = e.currentTarget.getBoundingClientRect()
+    const box = e.currentTarget.parentElement?.getBoundingClientRect()
+    if (!box?.height) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = {
+      id: e.pointerId,
+      box,
+      offset: block.top + block.height / 2 - e.clientY,
+      pct: theme.positionPct,
+    }
+  }
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (d?.id !== e.pointerId) return
+    // Same 5-95 bounds as the Position slider in style-panel.tsx.
+    d.pct = clamp(((e.clientY + d.offset - d.box.top) / d.box.height) * 100, 5, 95)
+    patchTheme({ positionPct: d.pct })
+  }
+
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (d?.id !== e.pointerId) return
+    drag.current = null
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    onCommit?.(d.pct)
+  }
 
   return (
     <div
@@ -89,12 +130,19 @@ export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible }: Pr
     >
       <div
         ref={layerRef}
+        className={draggable ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : undefined}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         style={{
           position: 'absolute',
           left: '50%',
           top: m.centreY,
           transform: 'translate(-50%, -50%)', // matches ASS Alignment 5
           maxWidth: '90%',
+          // Without this a touch drag scrolls the page instead of moving the caption.
+          touchAction: draggable ? 'none' : undefined,
           textAlign: 'center',
           whiteSpace: 'nowrap',
           lineHeight: 1.15,
@@ -115,6 +163,8 @@ export function CaptionOverlay({ videoRef, cues, theme, boxHeight, visible }: Pr
     </div>
   )
 }
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
 /** Index of the last word that has started by `t`. Never -1 inside a live cue. */
 function lastIndexAtOrBefore(cue: Cue, t: number) {

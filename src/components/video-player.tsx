@@ -20,6 +20,8 @@ type Props = {
   cues: Cue[]
   theme: Theme
   onTimeChange?: (t: number) => void
+  /** Persist a caption position dragged on the preview. */
+  onPositionCommit?: (pct: number) => void
 }
 
 const ASPECTS: { value: Aspect; label: string }[] = [
@@ -40,7 +42,7 @@ const SPEEDS = [0.5, 1, 1.5, 2]
  */
 const CHROME_PX = 230
 
-export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeChange }: Props) {
+export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeChange, onPositionCommit }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [boxHeight, setBoxHeight] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -133,6 +135,7 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
             theme={theme}
             boxHeight={boxHeight}
             visible={captionsVisible}
+            onCommit={onPositionCommit}
           />
         </div>
       </div>

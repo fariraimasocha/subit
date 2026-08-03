@@ -277,6 +277,7 @@ function Editor() {
               cues={project.cues}
               theme={theme}
               onTimeChange={setCurrentTime}
+              onPositionCommit={(positionPct) => persistTheme.mutate({ ...theme, positionPct })}
             />
           ) : (
             <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">

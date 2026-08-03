@@ -24,11 +24,18 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
  * to point it somewhere else.
  */
 const STARS_TTL_MS = 10 * 60 * 1000
+/**
+ * Failures get their own, much shorter window. Caching a miss for the full ten
+ * minutes means one flaky request, or a fetch that lost a race with server
+ * startup, blanks the count on every view for the rest of that window.
+ */
+const STARS_FAIL_TTL_MS = 30 * 1000
 let starsCache: { at: number; count: number | null } | null = null
 
 export const getStars = createServerFn({ method: 'GET' }).handler(async () => {
   const repo = process.env.GITHUB_REPO || 'fariraimasocha/subit'
-  if (starsCache && Date.now() - starsCache.at < STARS_TTL_MS) {
+  const ttl = starsCache?.count === null ? STARS_FAIL_TTL_MS : STARS_TTL_MS
+  if (starsCache && Date.now() - starsCache.at < ttl) {
     return { repo, count: starsCache.count }
   }
   let count: number | null = null
@@ -43,10 +50,15 @@ export const getStars = createServerFn({ method: 'GET' }).handler(async () => {
       signal: AbortSignal.timeout(4000),
     })
     if (res.ok) count = (await res.json() as { stargazers_count?: number }).stargazers_count ?? null
-  } catch {
+    // A silently missing count is indistinguishable from a wrong GITHUB_REPO,
+    // so say which one it was. Still not an error: the link renders regardless.
+    else console.warn(`[stars] GitHub returned ${res.status} for ${repo}`)
+  } catch (e) {
+    console.warn(`[stars] could not reach GitHub for ${repo}:`, (e as Error).message)
     count = null
   }
-  // Cache misses too, so a 404 or an outage does not retry on every render.
+  // Cache misses too, so a 404 or an outage does not retry on every render,
+  // but only for STARS_FAIL_TTL_MS.
   starsCache = { at: Date.now(), count }
   return { repo, count }
 })
