@@ -13,12 +13,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { Skeleton } from '~/components/ui/skeleton.tsx'
 import { SidebarTrigger } from '~/components/ui/sidebar.tsx'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs.tsx'
+import { Timeline } from '~/components/timeline.tsx'
 import { VideoPlayer } from '~/components/video-player.tsx'
 import type { Cue } from '~/lib/cues.ts'
+import { clampOverlay, type Overlay } from '~/lib/overlays.ts'
 import { projectQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
 import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
-import { getDownloadUrl, getJob, retryIngest, saveCues, saveTheme, startExport } from '~/server/api.ts'
+import {
+  getDownloadUrl,
+  getJob,
+  presign,
+  retryIngest,
+  saveCues,
+  saveOverlays,
+  saveTheme,
+  startExport,
+} from '~/server/api.ts'
 import { useEditor } from '~/store/editor.ts'
 
 export const Route = createFileRoute('/editor/$id')({ component: Editor })
@@ -28,7 +39,7 @@ function Editor() {
   const qc = useQueryClient()
   const { config, ready, known } = useConfig()
   const { data: project, isPending, error } = useQuery(projectQuery(id, ready))
-  const { theme, setTheme, patchTheme } = useEditor()
+  const { theme, setTheme, patchTheme, overlays, setOverlays, addOverlay, removeOverlay } = useEditor()
   const [currentTime, setCurrentTime] = useState(0)
   const [jobId, setJobId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -37,22 +48,40 @@ function Editor() {
    * Hydrate the store from the persisted snapshot ONCE per project. project.theme
    * is a fresh object out of JSON.parse on every refetch, so keying the effect on
    * it would re-seed the store each poll and snap a slider back to the last saved
-   * value while the user is still dragging it.
+   * value while the user is still dragging it. Overlays have the same problem and
+   * get the same treatment.
    */
   const hydrated = useRef<string | null>(null)
   useEffect(() => {
     if (!project || hydrated.current === project.id) return
     hydrated.current = project.id
     setTheme(project.theme ?? DEFAULT_THEME)
-  }, [project, setTheme])
+    setOverlays(project.overlays)
+  }, [project, setTheme, setOverlays])
+
+  /**
+   * Every write to this project shares one scope, which is what makes TanStack
+   * run them one at a time instead of in parallel. The overlapping sequences are
+   * real, not theoretical: drop an image on the timeline and drag another while
+   * it uploads, and unscoped mutations could land the drag's snapshot last,
+   * silently dropping the image still being uploaded. Export is in the scope for
+   * the same reason: runExport reads the row, so a caption drag still in flight
+   * would be missing from the burn.
+   *
+   * ponytail: serialised per tab, not per row. Two tabs on one project still
+   * last-write-wins, same ceiling as everything else here.
+   */
+  const scope = { id: `project-${id}` }
 
   const persistTheme = useMutation({
+    scope,
     mutationFn: (t: Theme) => saveTheme({ data: { id, theme: t } }),
     onError: (e) => toast.error((e as Error).message),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.project(id) }),
   })
 
   const persistCues = useMutation({
+    scope,
     mutationFn: (cues: Cue[]) => saveCues({ data: { id, cues } }),
     onError: (e) => toast.error((e as Error).message),
     onSuccess: () => {
@@ -61,9 +90,59 @@ function Editor() {
     },
   })
 
+  // The list is read when the save actually RUNS, never closed over: a commit
+  // fires from a pointerup handler that may be several store writes newer than
+  // this render, and a queued save may run later still.
+  const persistOverlays = useMutation({
+    scope,
+    mutationFn: () => saveOverlays({ data: { id, overlays: useEditor.getState().overlays } }),
+    onError: (e) => toast.error((e as Error).message),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.project(id) }),
+  })
+  const commitOverlays = () => persistOverlays.mutate()
+
+  const addImage = useMutation({
+    scope,
+    mutationFn: async (file: File) => {
+      const contentType = file.type || 'image/png'
+      const { key, url, getUrl } = await presign({
+        data: { filename: file.name, contentType, size: file.size, kind: 'image' },
+      })
+      // No XHR progress here: a 10 MB cap makes the upload shorter than the
+      // toast that would announce it.
+      const put = await fetch(url, { method: 'PUT', headers: { 'content-type': contentType }, body: file })
+      if (!put.ok) throw new Error(`Upload failed with ${put.status}. Check the bucket CORS rules.`)
+      // Lands at the playhead, three seconds long, centred and half width.
+      const at = videoRef.current?.currentTime ?? 0
+      addOverlay(
+        clampOverlay(
+          {
+            id: crypto.randomUUID(),
+            key,
+            url: getUrl ?? '',
+            name: file.name,
+            start: at,
+            end: at + 3,
+            xPct: 50,
+            yPct: 50,
+            widthPct: 40,
+          },
+          project?.duration ?? 0,
+        ),
+      )
+      return saveOverlays({ data: { id, overlays: useEditor.getState().overlays } })
+    },
+    onError: (e) => toast.error((e as Error).message),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.project(id) }),
+  })
+
   const exportMutation = useMutation({
+    // In the scope, so every queued save from the seconds before this click has
+    // landed by the time the server reads the row.
+    scope,
     mutationFn: async () => {
       await saveTheme({ data: { id, theme } })
+      await saveOverlays({ data: { id, overlays: useEditor.getState().overlays } })
       return startExport({ data: { id } })
     },
     onError: (e) => toast.error((e as Error).message),
@@ -185,7 +264,9 @@ function Editor() {
           )}
           <Button
             size="sm"
-            disabled={notReady || exporting || project.cues.length === 0}
+            disabled={
+              notReady || exporting || addImage.isPending || (project.cues.length === 0 && overlays.length === 0)
+            }
             onClick={() => exportMutation.mutate()}
           >
             {exporting ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -268,17 +349,35 @@ function Editor() {
 
         <div className="space-y-6 xl:min-h-0">
           {project.norm_url && project.width && project.height ? (
-            <VideoPlayer
-              key={project.norm_url}
-              src={project.norm_url}
-              videoRef={videoRef}
-              width={project.width}
-              height={project.height}
-              cues={project.cues}
-              theme={theme}
-              onTimeChange={setCurrentTime}
-              onPositionCommit={(positionPct) => persistTheme.mutate({ ...theme, positionPct })}
-            />
+            <>
+              <VideoPlayer
+                key={project.norm_url}
+                src={project.norm_url}
+                videoRef={videoRef}
+                width={project.width}
+                height={project.height}
+                cues={project.cues}
+                theme={theme}
+                overlays={overlays}
+                onTimeChange={setCurrentTime}
+                onPositionCommit={(positionPct) => persistTheme.mutate({ ...theme, positionPct })}
+                onOverlayCommit={commitOverlays}
+              />
+              <Timeline
+                videoRef={videoRef}
+                cues={project.cues}
+                overlays={overlays}
+                duration={project.duration ?? 0}
+                onCuesChange={(cues) => persistCues.mutate(cues)}
+                onOverlayCommit={commitOverlays}
+                onAddImage={(file) => addImage.mutate(file)}
+                onRemoveOverlay={(oid) => {
+                  removeOverlay(oid)
+                  commitOverlays()
+                }}
+                adding={addImage.isPending}
+              />
+            </>
           ) : (
             <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
               The preview appears once processing finishes.

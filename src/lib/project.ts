@@ -1,4 +1,5 @@
 import type { Cue } from './cues.ts'
+import type { Overlay } from './overlays.ts'
 import type { Theme } from './theme.ts'
 
 /**
@@ -28,11 +29,15 @@ export type ProjectRow = {
   src_key: string
   norm_key: string | null
   norm_url: string | null
+  /** One frame from the clip, for the project card. Null on older rows. */
+  poster_url: string | null
   width: number | null
   height: number | null
   duration: number | null
   cues_json: string | null
   theme_json: string | null
+  /** JSON Overlay[]. Null on every row created before the column existed. */
+  overlays_json: string | null
   export_url: string | null
   error: string | null
   created_at: number
@@ -40,8 +45,9 @@ export type ProjectRow = {
   stage: IngestStage | null
 }
 
-/** The row with the two JSON columns parsed. What every route actually wants. */
-export type Project = Omit<ProjectRow, 'cues_json' | 'theme_json'> & {
+/** The row with the JSON columns parsed. What every route actually wants. */
+export type Project = Omit<ProjectRow, 'cues_json' | 'theme_json' | 'overlays_json'> & {
   cues: Cue[]
   theme: Theme | null
+  overlays: Overlay[]
 }

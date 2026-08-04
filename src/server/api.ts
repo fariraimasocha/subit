@@ -1,16 +1,29 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import type { Cue } from '~/lib/cues.ts'
+import type { Overlay } from '~/lib/overlays.ts'
 import type { Theme } from '~/lib/theme.ts'
 import { createProject, deleteProject, getProject, listProjects } from './d1.server.ts'
 import type { Project } from '~/lib/project.ts'
 import { jobs, runExport, runIngest } from './jobs.server.ts'
-import { buildKey, deleteObject, exportKeyOf, presignDownloadUrl, presignPutUrl, r2Configured } from './r2.server.ts'
+import {
+  buildKey,
+  deleteObject,
+  exportKeyOf,
+  keyOf,
+  presignDownloadUrl,
+  presignPutUrl,
+  publicUrl,
+  r2Configured,
+} from './r2.server.ts'
 import { d1Configured } from './d1.server.ts'
 import { groqConfigured } from './groq.server.ts'
 import { updateProject } from './d1.server.ts'
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+/** An overlay is a logo or a sticker, not a source video. */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp']
 
 /**
  * Star count for the landing page.
@@ -133,15 +146,28 @@ export const presign = createServerFn({ method: 'POST' })
       filename: z.string().min(1),
       contentType: z.string().min(1),
       size: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+      kind: z.enum(['video', 'image']).default('video'),
     }),
   )
   .handler(async ({ data }) => {
     const ext = data.filename.split('.').pop()?.toLowerCase() ?? 'mp4'
+    if (data.kind === 'image') {
+      if (!IMAGE_EXTS.includes(ext)) throw new Error('Images must be PNG, JPG or WebP')
+      if (data.size > MAX_IMAGE_BYTES) throw new Error('That image is over 10 MB')
+      const key = buildKey('overlay', ext)
+      // getUrl comes back with the PUT so the preview can show the image the
+      // moment it lands, without a round trip through the project row.
+      return {
+        key,
+        url: await presignPutUrl(key, data.contentType, data.size),
+        getUrl: await publicUrl(key),
+      }
+    }
     if (!['mp4', 'mov'].includes(ext)) throw new Error('Only MP4 and MOV files are supported')
     const key = buildKey('src', ext)
     const url = await presignPutUrl(key, data.contentType, data.size)
     rememberKey(key)
-    return { key, url }
+    return { key, url, getUrl: null as string | null }
   })
 
 export const createProjectFn = createServerFn({ method: 'POST' })
@@ -180,6 +206,48 @@ export const saveCues = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+/**
+ * The key is the one field the export actually reads from the bucket, so it is
+ * pinned to the shape buildKey('overlay', ext) produces. Without this a caller
+ * could name any object in the bucket and have the server burn it into a video.
+ */
+const overlaySchema = z.object({
+  id: z.string().min(1),
+  key: z.string().regex(/^overlay\/[0-9a-f-]{36}\.(png|jpe?g|webp)$/),
+  name: z.string().max(200),
+  start: z.number().nonnegative(),
+  end: z.number().positive(),
+  xPct: z.number(),
+  yPct: z.number(),
+  widthPct: z.number(),
+})
+
+export const saveOverlays = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().min(1), overlays: z.array(overlaySchema).max(50) }))
+  .handler(async ({ data }) => {
+    const before = await getProject(data.id)
+    // url is derived here rather than accepted: a stored URL is what the <img>
+    // in the editor loads, and it should never be a string a caller chose.
+    const overlays: Overlay[] = await Promise.all(
+      data.overlays.map(async (o) => ({ ...o, url: await publicUrl(o.key) })),
+    )
+    await updateProject(data.id, { overlays_json: JSON.stringify(overlays) })
+
+    // Dropping an image off the timeline is the only moment its object becomes
+    // unreachable, so bin it here or the bucket fills with them. Best effort:
+    // the row is already correct, an orphan is not worth failing the save over.
+    //
+    // ponytail: read-then-delete, not a revision check, because the D1 HTTP API
+    // gives us no transaction to hang one on. The editor serialises its own
+    // saves, so the exposed cases are a second tab, or deleting an image while
+    // an export of it is already downloading. Both fail loudly (a failed export
+    // you re-run), neither loses the project.
+    const kept = new Set(overlays.map((o) => o.key))
+    const gone = (before?.overlays ?? []).filter((o) => !kept.has(o.key))
+    await Promise.all(gone.map((o) => deleteObject(o.key).catch(() => {})))
+    return { overlays }
+  })
+
 /** The whole Theme is stored, not an id plus overrides, so editing a preset
  *  later never silently restyles a finished project. */
 export const saveTheme = createServerFn({ method: 'POST' })
@@ -205,7 +273,13 @@ export const deleteProjectFn = createServerFn({ method: 'POST' })
     const project = await getProject(data.id)
     await deleteProject(data.id)
     if (project) {
-      const keys = [project.src_key, project.norm_key, exportKeyOf(project.export_url)]
+      const keys = [
+        project.src_key,
+        project.norm_key,
+        exportKeyOf(project.export_url),
+        keyOf(project.poster_url, 'poster'),
+        ...project.overlays.map((o) => o.key),
+      ]
       // Best effort: the row is already gone, so a failed delete must not turn
       // into an error the user can do anything about. Worst case is an orphan.
       await Promise.all(keys.filter((k): k is string => Boolean(k)).map((k) => deleteObject(k).catch(() => {})))

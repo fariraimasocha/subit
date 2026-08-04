@@ -115,6 +115,21 @@ export async function normalize(srcUrl: string, cwd: string, out = 'norm.mp4') {
   return out
 }
 
+/**
+ * One frame for the project card. Seeks before -i so ffmpeg jumps rather than
+ * decoding up to the mark, and clamps the seek inside the clip: -ss past the end
+ * produces no frame at all, which is how a 0.4s test clip gets no poster.
+ */
+export async function poster(input: string, cwd: string, durationSec: number, out = 'poster.jpg') {
+  const at = Math.max(0, Math.min(1, durationSec / 2))
+  await run(
+    FFMPEG,
+    ['-y', '-ss', String(at), '-i', input, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', out],
+    { cwd },
+  )
+  return out
+}
+
 /** 16 kHz mono FLAC is roughly 18 KB/s, so Groq's 25 MB cap is about 23 minutes. */
 export async function extractAudio(input: string, cwd: string, out = 'audio.flac', startSec?: number, durSec?: number) {
   const args = ['-y']
@@ -131,6 +146,18 @@ export async function hasAudio(file: string, cwd: string) {
   return ((JSON.parse(out) as { streams?: unknown[] }).streams ?? []).length > 0
 }
 
+export type BurnOpts = {
+  input: string
+  /** Overlay images, one extra -i each, in the order the filter graph indexes them. */
+  extraInputs?: string[]
+  /** From overlayFilter(). Null means nothing to draw, just re-encode. */
+  filter: string | null
+  cwd: string
+  durationSec: number
+  onPct: (pct: number) => void
+  out?: string
+}
+
 /**
  * VideoToolbox for normalize, libx264 for export. VideoToolbox has no CRF and
  * at matched bitrate visibly loses detail on high-contrast caption edges, which
@@ -139,22 +166,19 @@ export async function hasAudio(file: string, cwd: string) {
  * `-c:a copy` is only valid because normalize already produced AAC.
  * The `subtitles=` filter value is parsed twice, so a path containing : \ or '
  * needs double escaping. Sidestepped by spawning at cwd: jobDir with a bare
- * relative filename.
+ * relative filename, and by passing the overlay images as inputs rather than as
+ * paths inside the graph.
  */
-export async function burn(
-  input: string,
-  assFile: string,
-  cwd: string,
-  durationSec: number,
-  onPct: (pct: number) => void,
-  out = 'out.mp4',
-) {
+export async function burn({ input, extraInputs = [], filter, cwd, durationSec, onPct, out = 'out.mp4' }: BurnOpts) {
   await run(
     FFMPEG,
     [
       '-y',
       '-i', input,
-      '-vf', `subtitles=${assFile}:fontsdir=fonts`,
+      ...extraInputs.flatMap((f) => ['-i', f]),
+      // `0:a?` rather than `0:a`: a silent clip has no audio stream and the map
+      // would abort the whole export.
+      ...(filter ? ['-filter_complex', filter, '-map', '[v]', '-map', '0:a?'] : []),
       '-c:v', process.env.EXPORT_ENCODER || 'libx264',
       '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'copy',

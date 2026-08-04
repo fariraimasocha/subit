@@ -1,4 +1,5 @@
 import type { Cue } from '~/lib/cues.ts'
+import type { Overlay } from '~/lib/overlays.ts'
 import type { Project, ProjectRow } from '~/lib/project.ts'
 import type { Theme } from '~/lib/theme.ts'
 
@@ -43,11 +44,14 @@ export async function d1<T = Record<string, unknown>>(sql: string, params: unkno
 }
 
 export function hydrate(row: ProjectRow): Project {
-  const { cues_json, theme_json, ...rest } = row
+  const { cues_json, theme_json, overlays_json, ...rest } = row
   return {
     ...rest,
     cues: cues_json ? (JSON.parse(cues_json) as Cue[]) : [],
     theme: theme_json ? (JSON.parse(theme_json) as Theme) : null,
+    // Null for every project that predates the column, hence the default rather
+    // than a NOT NULL migration.
+    overlays: overlays_json ? (JSON.parse(overlays_json) as Overlay[]) : [],
   }
 }
 

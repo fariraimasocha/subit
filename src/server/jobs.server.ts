@@ -2,10 +2,11 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { toAss } from '~/lib/ass.ts'
 import { groupWords } from '~/lib/cues.ts'
+import { overlayFilter } from '~/lib/overlays.ts'
 import type { IngestStage } from '~/lib/project.ts'
 import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
 import { getProject, updateProject } from './d1.server.ts'
-import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, probe } from './ffmpeg.server.ts'
+import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, poster, probe } from './ffmpeg.server.ts'
 import { transcribe } from './groq.server.ts'
 import { buildKey, deleteObject, exportKeyOf, presignGetUrl, publicUrl, putObject } from './r2.server.ts'
 
@@ -48,9 +49,22 @@ export async function runIngest(projectId: string) {
     await putObject(normKey, await readFile(path.join(dir, norm)), 'video/mp4')
     const normUrl = await publicUrl(normKey)
 
+    // The card thumbnail. Best effort: a project without a poster still works,
+    // and failing the whole ingest over a JPEG would be absurd.
+    let posterUrl: string | null = null
+    try {
+      const shot = await poster(norm, dir, meta.duration)
+      const posterKey = buildKey('poster', 'jpg')
+      await putObject(posterKey, await readFile(path.join(dir, shot)), 'image/jpeg')
+      posterUrl = await publicUrl(posterKey)
+    } catch (e) {
+      console.warn('[ingest] no poster frame:', (e as Error).message)
+    }
+
     await updateProject(projectId, {
       norm_key: normKey,
       norm_url: normUrl,
+      poster_url: posterUrl,
       width: meta.width,
       height: meta.height,
       duration: meta.duration,
@@ -79,6 +93,13 @@ export async function runIngest(projectId: string) {
   }
 }
 
+/** Presigned GET to a file in the job dir. Used for norm.mp4 and every overlay. */
+async function download(url: string, to: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`could not fetch ${path.basename(to)}: ${res.status}`)
+  await writeFile(to, new Uint8Array(await res.arrayBuffer()))
+}
+
 export async function runExport(projectId: string, jobId: string) {
   const dir = await makeJobDir()
   jobs.set(jobId, { status: 'running', pct: 0 })
@@ -93,22 +114,37 @@ export async function runExport(projectId: string, jobId: string) {
     const normUrl = await presignGetUrl(project.norm_key)
     // Pull norm.mp4 down once: the burn reads it twice (video and audio copy)
     // and ffmpeg would otherwise range-request R2 the whole way through.
-    const res = await fetch(normUrl)
-    if (!res.ok) throw new Error(`could not fetch norm.mp4: ${res.status}`)
-    await writeFile(path.join(dir, 'norm.mp4'), new Uint8Array(await res.arrayBuffer()))
+    await download(normUrl, path.join(dir, 'norm.mp4'))
 
-    // PlayResX/PlayResY come from the same probe that produced the file being
-    // burned. Never let a caller pass them in separately.
-    await writeFile(path.join(dir, 'cues.ass'), toAss(project.cues, theme, project.width, project.height), 'utf8')
+    const hasCues = project.cues.length > 0
+    if (hasCues) {
+      // PlayResX/PlayResY come from the same probe that produced the file being
+      // burned. Never let a caller pass them in separately.
+      await writeFile(path.join(dir, 'cues.ass'), toAss(project.cues, theme, project.width, project.height), 'utf8')
 
-    // fontsdir matches the font's INTERNAL family name, not the filename. Copy
-    // the TTF into jobDir/fonts so the spawn cwd relative path works.
-    await mkdir(path.join(dir, 'fonts'), { recursive: true })
-    await copyFile(path.join(FONTS_DIR, theme.fontFile), path.join(dir, 'fonts', theme.fontFile))
+      // fontsdir matches the font's INTERNAL family name, not the filename. Copy
+      // the TTF into jobDir/fonts so the spawn cwd relative path works.
+      await mkdir(path.join(dir, 'fonts'), { recursive: true })
+      await copyFile(path.join(FONTS_DIR, theme.fontFile), path.join(dir, 'fonts', theme.fontFile))
+    }
 
-    const out = await burn('norm.mp4', 'cues.ass', dir, project.duration ?? 0, (pct) => {
-      const j = jobs.get(jobId)
-      if (j) jobs.set(jobId, { ...j, pct })
+    // The graph names its inputs ov0, ov1, ... and ffmpeg opens them by index,
+    // so the download order below has to stay the array order.
+    const { filter, inputs } = overlayFilter(project.overlays, hasCues ? 'cues.ass' : null, project.width)
+    for (const [i, name] of inputs.entries()) {
+      await download(await presignGetUrl(project.overlays[i].key), path.join(dir, name))
+    }
+
+    const out = await burn({
+      input: 'norm.mp4',
+      extraInputs: inputs,
+      filter,
+      cwd: dir,
+      durationSec: project.duration ?? 0,
+      onPct: (pct) => {
+        const j = jobs.get(jobId)
+        if (j) jobs.set(jobId, { ...j, pct })
+      },
     })
 
     const key = buildKey('export', 'mp4')

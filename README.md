@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS projects (
   width INTEGER, height INTEGER, duration REAL,
   cues_json TEXT,      -- JSON Cue[]
   theme_json TEXT,     -- full Theme snapshot, not an id
+  overlays_json TEXT,  -- JSON Overlay[], the images on the timeline
   export_url TEXT, error TEXT,
   stage TEXT,          -- normalising|uploading|transcribing|grouping
   created_at INTEGER NOT NULL
@@ -107,6 +108,15 @@ CREATE TABLE IF NOT EXISTS projects (
 `stage` is easy to miss: `PLAN.md` predates it and the live database picked it up
 through a later `ALTER TABLE`. Leave it out and ingest fails on the first status
 write.
+
+An existing database from before the timeline shipped needs the new column once:
+
+```sql
+ALTER TABLE projects ADD COLUMN overlays_json TEXT;
+```
+
+Rows without it read as "no images", so nothing breaks until you drop an image on
+the timeline and the save fails.
 
 Then create an account API token: My Profile > API Tokens > Create token, with
 **D1 Edit** on this account. That is `CLOUDFLARE_API_TOKEN`, and it is a

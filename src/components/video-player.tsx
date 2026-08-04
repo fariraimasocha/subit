@@ -1,12 +1,14 @@
 import { ChevronDown, Eye, Maximize2, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CaptionOverlay } from '~/components/caption-overlay.tsx'
+import { ImageOverlay } from '~/components/image-overlay.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Label } from '~/components/ui/label.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover.tsx'
 import { Slider } from '~/components/ui/slider.tsx'
 import { Switch } from '~/components/ui/switch.tsx'
 import type { Cue } from '~/lib/cues.ts'
+import type { Overlay } from '~/lib/overlays.ts'
 import type { Theme } from '~/lib/theme.ts'
 import { cn } from '~/lib/utils.ts'
 import { useEditor, type Aspect } from '~/store/editor.ts'
@@ -19,9 +21,12 @@ type Props = {
   height: number
   cues: Cue[]
   theme: Theme
+  overlays: Overlay[]
   onTimeChange?: (t: number) => void
   /** Persist a caption position dragged on the preview. */
   onPositionCommit?: (pct: number) => void
+  /** Persist an image moved or resized on the preview. */
+  onOverlayCommit?: (o: Overlay) => void
 }
 
 const ASPECTS: { value: Aspect; label: string }[] = [
@@ -37,12 +42,24 @@ const SPEEDS = [0.5, 1, 1.5, 2]
 /**
  * Everything stacked above and below the preview that also has to fit on
  * screen: the editor header, the page padding, the frame control row, the
- * transport row and the gaps between them. Overshooting only shrinks the
- * preview slightly; undershooting pushes the transport off the bottom.
+ * transport row, the timeline and the gaps between them. Overshooting only
+ * shrinks the preview slightly; undershooting pushes the timeline off the
+ * bottom.
  */
-const CHROME_PX = 230
+const CHROME_PX = 400
 
-export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeChange, onPositionCommit }: Props) {
+export function VideoPlayer({
+  src,
+  videoRef,
+  width,
+  height,
+  cues,
+  theme,
+  overlays,
+  onTimeChange,
+  onPositionCommit,
+  onOverlayCommit,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [boxHeight, setBoxHeight] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -128,6 +145,14 @@ export function VideoPlayer({ src, videoRef, width, height, cues, theme, onTimeC
             className="block h-full w-full"
             style={{ objectFit: aspect === 'source' ? 'contain' : 'cover' }}
             onClick={toggle}
+          />
+          {/* Images first: later siblings paint on top, and the export chains
+              the subtitles filter after the overlays for the same reason. */}
+          <ImageOverlay
+            videoRef={videoRef}
+            overlays={overlays}
+            duration={duration}
+            onCommit={onOverlayCommit}
           />
           <CaptionOverlay
             videoRef={videoRef}

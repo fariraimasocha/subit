@@ -17,7 +17,12 @@ export const Route = createRootRoute({
       { title: 'Subit' },
       { name: 'description', content: 'Burn word by word captions into your videos.' },
     ],
-    links: [{ rel: 'stylesheet', href: styles }],
+    links: [
+      { rel: 'stylesheet', href: styles },
+      // One SVG, no .ico: the tile carries its own background, so it reads on
+      // both light and dark tab bars at every size.
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+    ],
   }),
   shellComponent: RootDocument,
   notFoundComponent: () => (

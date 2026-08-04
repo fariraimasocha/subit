@@ -1,35 +1,68 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Upload, Clapperboard } from 'lucide-react'
-import { Button } from '~/components/ui/button.tsx'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
-import { Skeleton } from '~/components/ui/skeleton.tsx'
-import { StatusBadge } from '~/components/status-badge.tsx'
-import { projectsQuery, useConfig } from '~/lib/queries.ts'
-import { SetupNotice } from '~/components/setup-notice.tsx'
+import { Clapperboard, FolderOpen, Upload, Wand2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { EmptyState } from '~/components/empty-state.tsx'
+import { ProjectCard } from '~/components/project-card.tsx'
+import { SetupNotice } from '~/components/setup-notice.tsx'
+import { Button } from '~/components/ui/button.tsx'
+import { Card, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
+import { Skeleton } from '~/components/ui/skeleton.tsx'
+import { TextAnimate } from '~/components/ui/text-animate.tsx'
+import type { Project } from '~/lib/project.ts'
+import { projectsQuery, useConfig } from '~/lib/queries.ts'
 
 export const Route = createFileRoute('/dashboard/')({ component: DashboardHome })
+
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
 
 function DashboardHome() {
   const { config, ready, known } = useConfig()
   const { data, isPending, error } = useQuery(projectsQuery(ready))
-  const recent = data?.slice(0, 6) ?? []
+  const projects = data ?? []
+  const recent = projects.slice(0, 6)
+
+  // The hour is the browser's, not the server's, so it can only be read after
+  // mount. Rendering it during SSR would hydrate into a different greeting for
+  // anyone in another timezone.
+  const [hello, setHello] = useState<string | null>(null)
+  useEffect(() => setHello(greeting()), [])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
-          <p className="text-sm text-muted-foreground">Your most recent projects.</p>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        {/* Fixed height so the row does not jump when the greeting lands. */}
+        <div className="flex h-10 items-center">
+          {hello && (
+            <TextAnimate
+              text={hello}
+              type="fadeInUp"
+              className="text-3xl font-semibold tracking-tight"
+            />
+          )}
         </div>
-        <Button asChild>
-          <Link to="/dashboard/new">
-            <Upload className="size-4" />
-            New project
-          </Link>
-        </Button>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link to="/dashboard/projects">
+              <FolderOpen className="size-4" />
+              All projects
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link to="/dashboard/new">
+              <Upload className="size-4" />
+              New project
+            </Link>
+          </Button>
+        </div>
+      </header>
+
+      <QuickActions latest={projects[0]} />
 
       {known && !ready && <SetupNotice config={config} />}
 
@@ -43,9 +76,9 @@ function DashboardHome() {
       )}
 
       {ready && isPending && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
+            <Skeleton key={i} className="h-64 rounded-[28px]" />
           ))}
         </div>
       )}
@@ -66,25 +99,79 @@ function DashboardHome() {
         />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {recent.map((p) => (
-          <Link key={p.id} to="/editor/$id" params={{ id: p.id }}>
-            <Card className="h-full transition-colors hover:border-foreground/30">
-              <CardHeader>
-                <CardTitle className="truncate text-base">{p.name}</CardTitle>
-                <CardDescription>
-                  {new Date(p.created_at).toLocaleDateString()}
-                  {p.duration ? ` · ${Math.round(p.duration)}s` : ''}
-                  {p.cues.length ? ` · ${p.cues.length} cues` : ''}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <StatusBadge status={p.status} />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {recent.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="text-sm font-medium text-muted-foreground">Recent projects</h2>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {recent.map((p) => (
+              <ProjectCard key={p.id} project={p} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
+  )
+}
+
+/**
+ * Three real entry points, not feature adverts: upload, browse, and pick up
+ * where you left off. The third only appears once there is something to
+ * continue.
+ */
+function QuickActions({ latest }: { latest?: Project }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Action
+        to="/dashboard/new"
+        icon={Upload}
+        title="Add captions"
+        body="Upload an MP4 or MOV and Subit transcribes it word by word."
+      />
+      <Action
+        to="/dashboard/projects"
+        icon={FolderOpen}
+        title="Browse projects"
+        body="Every clip you have uploaded, with status and export."
+      />
+      {latest && (
+        <Action
+          to="/editor/$id"
+          params={{ id: latest.id }}
+          icon={Wand2}
+          title="Keep editing"
+          body={latest.name}
+        />
+      )}
+    </div>
+  )
+}
+
+function Action({
+  to,
+  params,
+  icon: Icon,
+  title,
+  body,
+}: {
+  to: string
+  params?: Record<string, string>
+  icon: React.ElementType
+  title: string
+  body: string
+}) {
+  return (
+    <Link
+      to={to}
+      params={params as never}
+      className="group flex items-start gap-4 rounded-2xl border bg-card p-4 transition-colors hover:border-foreground/30"
+    >
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted transition-colors group-hover:bg-foreground group-hover:text-background">
+        <Icon className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{body}</span>
+      </span>
+    </Link>
   )
 }

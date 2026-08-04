@@ -103,22 +103,24 @@ export async function putObject(key: string, body: Uint8Array | ArrayBuffer, con
 }
 
 /**
- * Recover the object key from a stored URL. export_url is presigned or public
- * depending on config, so the key has to come back out of the path.
+ * Recover the object key from a stored URL. The stored URLs are presigned or
+ * public depending on config, so the key has to come back out of the path.
  */
-export function exportKeyOf(url: string | null) {
+export function keyOf(url: string | null, scope: string) {
   if (!url) return null
   try {
     const path = new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
     // lastIndexOf, not indexOf: a presigned URL carries the bucket in the path
     // too, so a bucket literally named "export" would otherwise match first and
     // yield a key that points at nothing.
-    const i = path.lastIndexOf('export')
+    const i = path.lastIndexOf(scope)
     return i >= 0 ? path.slice(i).join('/') : null
   } catch {
     return null
   }
 }
+
+export const exportKeyOf = (url: string | null) => keyOf(url, 'export')
 
 export async function deleteObject(key: string) {
   assertConfigured()
