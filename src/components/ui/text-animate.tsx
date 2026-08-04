@@ -1,3 +1,9 @@
+/**
+ * Vendored from the cult-ui registry: https://cult-ui.com/r/text-animate.json
+ * Kept as upstream ships it, including the commented-out useInView effect and
+ * the ctrls it would have used, so a later re-add from the registry is a clean
+ * diff. The only edit is type-only imports for verbatimModuleSyntax.
+ */
 "use client"
 
 import { useEffect, useRef, type FC } from "react"
@@ -215,22 +221,18 @@ const TextAnimate: FC<Props> = ({
 
   const ctrls = useAnimation()
 
-  /**
-   * Upstream ships this effect commented out and drives the letters with
-   * `animate="visible"` on the parent, which never leaves the hidden state here:
-   * the letters stay parked at translateY(200%) forever. Driving the controls
-   * imperatively is the path the file was written for (hence useAnimation and
-   * useInView already being imported) and it keeps the parent's staggerChildren,
-   * which per-letter animate props would throw away.
-   */
-  useEffect(() => {
-    console.log("[TextAnimate] effect", { isInView, hasRef: Boolean(ref.current) })
-    ctrls.start(isInView ? "visible" : "hidden")
-  }, [ctrls, isInView])
+  //   useEffect(() => {
+  //     if (isInView) {
+  //       ctrls.start("visible");
+  //     }
+  //     if (!isInView) {
+  //       ctrls.start("hidden");
+  //     }
+  //   }, [ctrls, isInView]);
 
   if (type === "rollIn" || type === "whipIn") {
     return (
-      <h2 className="mt-10 text-3xl font-black text-black dark:text-neutral-100 py-5 pb-8 px-8 md:text-5xl">
+      <h2 className="font-black text-foreground">
         {text.split(" ").map((word, index) => {
           return (
             <motion.span
@@ -269,13 +271,12 @@ const TextAnimate: FC<Props> = ({
 
   return (
     <motion.h2
-      ref={ref}
       style={{ display: "flex", overflow: "hidden" }}
       role="heading"
       variants={container}
       initial="hidden"
-      animate={ctrls}
-      className="mt-10 text-4xl font-black text-black dark:text-neutral-100 py-5 pb-8 px-8 md:text-5xl"
+      animate="visible"
+      className="font-black text-foreground"
       {...props}
     >
       {letters.map((letter, index) => (

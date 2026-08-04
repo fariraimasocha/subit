@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS projects (
   cues_json TEXT,      -- JSON Cue[]
   theme_json TEXT,     -- full Theme snapshot, not an id
   overlays_json TEXT,  -- JSON Overlay[], the images on the timeline
+  poster_url TEXT,     -- one frame from the clip, for the project card
   export_url TEXT, error TEXT,
   stage TEXT,          -- normalising|uploading|transcribing|grouping
   created_at INTEGER NOT NULL
@@ -109,14 +110,17 @@ CREATE TABLE IF NOT EXISTS projects (
 through a later `ALTER TABLE`. Leave it out and ingest fails on the first status
 write.
 
-An existing database from before the timeline shipped needs the new column once:
+An existing database from before the timeline shipped needs the new columns once:
 
 ```sql
 ALTER TABLE projects ADD COLUMN overlays_json TEXT;
+ALTER TABLE projects ADD COLUMN poster_url TEXT;
 ```
 
-Rows without it read as "no images", so nothing breaks until you drop an image on
-the timeline and the save fails.
+Rows without `overlays_json` read as "no images", so nothing breaks until you drop
+an image on the timeline and the save fails. Rows without `poster_url` fall back to
+a placeholder on the project card; new uploads get a poster during ingest, and
+older ones only get one if you re-run ingest from the editor's Retry.
 
 Then create an account API token: My Profile > API Tokens > Create token, with
 **D1 Edit** on this account. That is `CLOUDFLARE_API_TOKEN`, and it is a

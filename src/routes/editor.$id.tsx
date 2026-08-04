@@ -286,7 +286,7 @@ function Editor() {
           plays. Narrower than that it stays a normal stacked page. */}
       <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden">
       {exportStalled && (
-        <Card className="mb-6 overflow-hidden border-l-4 border-l-amber-500">
+        <Card className="mb-6 overflow-hidden border-l-4 border-l-brand">
           <CardHeader>
             <CardTitle className="text-base">That export did not finish</CardTitle>
             <CardDescription>
@@ -314,7 +314,7 @@ function Editor() {
       )}
 
       {notReady && (
-        <Card className="mb-6 overflow-hidden border-l-4 border-l-blue-500">
+        <Card className="mb-6 overflow-hidden border-l-4 border-l-brand">
           <CardHeader>
             <CardTitle className="text-base">Subit is working on your video</CardTitle>
             <CardDescription>This page updates itself, no need to reload.</CardDescription>

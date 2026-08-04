@@ -22,6 +22,8 @@ import {
 import type { Project } from '~/lib/project.ts'
 import { cn } from '~/lib/utils.ts'
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 /** m:ss, the same shape the projects table uses. */
 function length(sec: number | null) {
   if (!sec) return null
@@ -38,8 +40,8 @@ function length(sec: number | null) {
 export function ProjectCard({ project: p }: { project: Project }) {
   const meta = [
     new Date(p.created_at).toLocaleDateString(),
-    p.cues.length ? `${p.cues.length} cues` : null,
-    p.overlays.length ? `${p.overlays.length} images` : null,
+    p.cues.length ? plural(p.cues.length, 'cue') : null,
+    p.overlays.length ? plural(p.overlays.length, 'image') : null,
   ]
     .filter(Boolean)
     .join(' · ')

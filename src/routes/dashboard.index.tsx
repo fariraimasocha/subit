@@ -41,7 +41,7 @@ function DashboardHome() {
           {hello && (
             <TextAnimate
               text={hello}
-              type="fadeInUp"
+              type="calmInUp"
               className="text-3xl font-semibold tracking-tight"
             />
           )}
@@ -170,7 +170,7 @@ function Action({
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-medium">{title}</span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{body}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground line-clamp-2">{body}</span>
       </span>
     </Link>
   )

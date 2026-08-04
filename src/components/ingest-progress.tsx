@@ -21,7 +21,7 @@ export function IngestProgress({ stage, failed }: { stage: IngestStage | null; f
           <li key={s.id} className="flex items-center gap-3 text-sm">
             <span className="flex size-5 shrink-0 items-center justify-center">
               {done ? (
-                <Check className="size-4 text-emerald-400" />
+                <Check className="size-4 text-ok" />
               ) : active && failed ? (
                 <Circle className="size-4 fill-destructive text-destructive" />
               ) : active ? (

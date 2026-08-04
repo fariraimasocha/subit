@@ -186,7 +186,7 @@ export function Timeline({
               {ticks(dur, pps).map((t) => (
                 <span
                   key={t}
-                  className="absolute top-0 flex items-center border-l border-border/70 pl-1.5 text-[10px] tabular-nums text-muted-foreground"
+                  className="absolute top-0 flex items-center border-l border-border/70 pl-1.5 text-xs tabular-nums text-muted-foreground"
                   style={{ left: t * pps, height: RULER_H }}
                 >
                   {label(t)}
@@ -210,7 +210,7 @@ export function Timeline({
                   }}
                   onCommit={(start, end) => onCuesChange(retime(cues, c.id, start, end))}
                 >
-                  <span className="truncate px-1 text-[11px]">
+                  <span className="truncate px-1 text-xs">
                     {c.words.map((w) => w.text.trim()).join(' ')}
                   </span>
                 </Block>
@@ -231,7 +231,7 @@ export function Timeline({
                   pps={pps}
                   duration={dur}
                   selected={o.id === selectedOverlayId}
-                  className="bg-sky-500/25 ring-sky-300 hover:bg-sky-500/35"
+                  className="bg-ok/25 ring-ok hover:bg-ok/35"
                   onSelect={() => selectOverlay(o.id)}
                   onCommit={(start, end) => {
                     const next = clampOverlay({ ...o, start, end }, dur)
@@ -240,17 +240,17 @@ export function Timeline({
                   }}
                 >
                   <img src={o.url} alt="" className="size-6 shrink-0 rounded-xs object-cover" />
-                  <span className="truncate text-[11px]">{o.name}</span>
+                  <span className="truncate text-xs">{o.name}</span>
                 </Block>
               ))}
             </Lane>
 
             <div
               ref={headRef}
-              className="pointer-events-none absolute top-0 bottom-0 left-0 w-px bg-red-500"
+              className="pointer-events-none absolute top-0 bottom-0 left-0 w-px bg-brand"
               aria-hidden
             >
-              <span className="absolute -top-px -left-[3px] size-[7px] rounded-full bg-red-500" />
+              <span className="absolute -top-px -left-[3px] size-[7px] rounded-full bg-brand" />
             </div>
           </div>
         </div>
@@ -263,7 +263,7 @@ function LaneLabel({ name, count, height }: { name: string; count: number; heigh
   return (
     <div className="flex flex-col justify-center border-b px-3 last:border-b-0" style={{ height }}>
       <span className="text-xs font-medium">{name}</span>
-      <span className="text-[10px] text-muted-foreground tabular-nums">{count}</span>
+      <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
     </div>
   )
 }

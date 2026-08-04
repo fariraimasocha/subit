@@ -1,3 +1,8 @@
+/**
+ * Vendored from the cult-ui registry: https://cult-ui.com/r/expandable-screen.json
+ * Unmodified. The registry sits behind a bot checkpoint that rejects the shadcn
+ * CLI, so this arrived by hand rather than by `shadcn add`.
+ */
 "use client"
 
 import {

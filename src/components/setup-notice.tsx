@@ -15,7 +15,7 @@ export function SetupNotice({ config }: { config?: { r2: boolean; d1: boolean; g
   return (
     // A left accent stripe marks this as a callout rather than another panel,
     // and costs one border instead of a whole decorated container.
-    <Card className="overflow-hidden border-l-4 border-l-amber-500">
+    <Card className="overflow-hidden border-l-4 border-l-warn">
       <CardHeader>
         <CardTitle className="text-base">Finish the setup first</CardTitle>
         <CardDescription>
@@ -29,9 +29,9 @@ export function SetupNotice({ config }: { config?: { r2: boolean; d1: boolean; g
         {rows.map(([name, ok, hint]) => (
           <div key={name} className="flex items-start gap-3 text-sm">
             {ok ? (
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ok" />
             ) : (
-              <Circle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+              <Circle className="mt-0.5 size-4 shrink-0 text-warn" />
             )}
             <span className="w-12 shrink-0 font-medium">{name}</span>
             <span className="text-muted-foreground">{hint}</span>

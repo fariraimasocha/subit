@@ -72,7 +72,7 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
             <button
               type="button"
               onClick={() => onSeek(cue.start)}
-              className="w-14 shrink-0 text-left font-mono text-[11px] tabular-nums text-muted-foreground hover:text-foreground"
+              className="w-14 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground"
             >
               {fmt(cue.start)}
             </button>

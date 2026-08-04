@@ -64,75 +64,101 @@
   font-display: block;
 }
 
+/*
+ * THE TOKENS. Every colour in the app resolves back to the block below, and
+ * nothing outside this file writes a raw colour. Two groups:
+ *
+ *   1. The foundation: surfaces, text levels, one border, one brand accent.
+ *      These are the values a designer changes.
+ *   2. The shadcn names, aliased onto the foundation. They exist because the
+ *      generated components in components/ui reference them, not because they
+ *      are a second system. Changing a foundation value moves both.
+ *
+ * The ratios are asserted, not eyeballed: see lib/contrast.test.ts, which reads
+ * this file and fails if a text level drops under 4.5:1 or a border or the
+ * brand drops under 3:1 against any surface it can sit on. That is why the
+ * surface ramp is tight (6, 9, 12, 15) and the border is a mid grey rather than
+ * the near invisible 12% white it used to be: one border token cannot clear 3:1
+ * against a wider ramp without going lighter than the text.
+ */
 :root {
   --radius: 0.625rem;
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(0 0% 9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(0 0% 9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(0 0% 9%);
-  --primary: hsl(0 0% 9%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(0 0% 96.1%);
-  --secondary-foreground: hsl(0 0% 9%);
-  --muted: hsl(0 0% 96.1%);
-  --muted-foreground: hsl(0 0% 45.1%);
-  --accent: hsl(0 0% 96.1%);
-  --accent-foreground: hsl(0 0% 9%);
-  --destructive: hsl(0 72% 51%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 89.8%);
-  --input: hsl(0 0% 89.8%);
-  --ring: hsl(0 0% 63%);
-  --chart-1: hsl(41 78% 55%);
-  --chart-2: hsl(185 43% 45%);
-  --chart-3: hsl(227 30% 40%);
-  --chart-4: hsl(84 62% 66%);
-  --chart-5: hsl(70 65% 61%);
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* Foundation, light. */
+  --bg: hsl(0 0% 100%);
+  --surface-1: hsl(0 0% 100%);
+  --surface-2: hsl(0 0% 96%);
+  --surface-3: hsl(0 0% 92%);
+  --text-primary: hsl(0 0% 9%);
+  --text-secondary: hsl(0 0% 32%);
+  --text-muted: hsl(0 0% 40%);
+  --border-1: hsl(0 0% 52%);
+  /* The one accent. Focus rings, selected states, primary actions, playhead. */
+  --brand: hsl(258 78% 47%);
+  --brand-foreground: hsl(0 0% 100%);
+  /*
+   * Status, a separate axis from the accent. These are picked to be readable as
+   * TEXT on any surface, because a status pill is icon plus label first and a
+   * tint second: the fill is --ok/12, the text is --ok. Never used to mean
+   * "interactive", that is --brand's job alone.
+   */
+  --ok: hsl(152 80% 24%);
+  --warn: hsl(32 100% 27%);
+  --danger: hsl(0 72% 42%);
+  --danger-foreground: hsl(0 0% 100%);
+  /*
+   * Stands in for a video frame: preset chips and caption samples preview white
+   * text over picture, so they stay dark in both themes. Not a surface level,
+   * it is never a background for UI text.
+   */
+  --video-surface: hsl(0 0% 11%);
+
+  /* shadcn names, aliased onto the foundation above. */
+  --background: var(--bg);
+  --foreground: var(--text-primary);
+  --card: var(--surface-1);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-1);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+  --border: var(--border-1);
+  --input: var(--border-1);
+  --ring: var(--brand);
+  --sidebar: var(--surface-2);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+  --sidebar-accent: var(--surface-3);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-1);
+  --sidebar-ring: var(--brand);
 }
 
 .dark {
-  --background: hsl(0 0% 6%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(0 0% 9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(0 0% 9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(0 0% 9%);
-  --secondary: hsl(0 0% 14.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(0 0% 14.9%);
-  --muted-foreground: hsl(0 0% 63.9%);
-  --accent: hsl(0 0% 14.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 72% 51%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 100% / 12%);
-  --input: hsl(0 0% 100% / 16%);
-  --ring: hsl(0 0% 45%);
-  --chart-1: hsl(264 60% 50%);
-  --chart-2: hsl(162 55% 55%);
-  --chart-3: hsl(70 65% 61%);
-  --chart-4: hsl(304 65% 60%);
-  --chart-5: hsl(16 70% 58%);
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  /* Foundation, dark. The shipped look: near black page, raised surfaces. */
+  --bg: hsl(0 0% 6%);
+  --surface-1: hsl(0 0% 9%);
+  --surface-2: hsl(0 0% 12%);
+  --surface-3: hsl(0 0% 15%);
+  --text-primary: hsl(0 0% 98%);
+  --text-secondary: hsl(0 0% 78%);
+  --text-muted: hsl(0 0% 68%);
+  --border-1: hsl(0 0% 44%);
+  --brand: hsl(258 90% 64%);
+  --brand-foreground: hsl(0 0% 100%);
+  --ok: hsl(152 60% 55%);
+  --warn: hsl(38 95% 60%);
+  --danger: hsl(0 85% 68%);
+  --danger-foreground: hsl(0 0% 8%);
 }
 
 @theme inline {
@@ -140,6 +166,29 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * 14px floor. text-xs is redefined rather than rewritten at ~40 call sites,
+   * which also means a stray text-xs added later cannot reintroduce 12px.
+   * Matches text-sm exactly, so the two are now one step.
+   */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: calc(1.25 / 0.875);
+
+  /* Foundation, exposed to Tailwind: bg-surface-2, text-muted, border-brand. */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-video-surface: var(--video-surface);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -159,11 +208,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -176,10 +220,38 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /*
+   * The floor for keyboard focus. A dark theme swallows the browser default, so
+   * every tab stop that does not style its own focus gets this one. Components
+   * that DO style it (button, input, the shadcn ring-[3px] pattern) set
+   * outline-none themselves and win here, which is what stops the two from
+   * stacking into a double ring.
+   */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * One guard for the whole app rather than a per-component check. Motion that
+ * carries meaning (the caption preview's word timing, an export progress bar)
+ * still updates, it just stops sliding and fading to get there.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

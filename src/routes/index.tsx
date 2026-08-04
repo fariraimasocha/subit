@@ -44,7 +44,7 @@ function Landing() {
         {THEMES.map((t) => (
           <div
             key={t.id}
-            className="flex aspect-[4/5] items-center justify-center rounded-xl border bg-neutral-900 p-3"
+            className="flex aspect-[4/5] items-center justify-center rounded-xl border bg-video-surface p-3"
           >
             <span
               className="text-center leading-tight"

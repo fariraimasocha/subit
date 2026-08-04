@@ -44,7 +44,7 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
               onClick={() => onPreset(t)}
               aria-pressed={theme.id === t.id}
               className={cn(
-                'flex h-14 items-center justify-center rounded-lg border bg-neutral-900 px-1.5 transition-colors',
+                'flex h-14 items-center justify-center rounded-lg border bg-video-surface px-1.5 transition-colors',
                 theme.id === t.id
                   ? 'border-foreground ring-1 ring-foreground'
                   : 'border-border hover:border-foreground/40',

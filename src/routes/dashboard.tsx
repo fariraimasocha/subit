@@ -22,7 +22,7 @@ function DashboardShell() {
           <span className="text-sm text-muted-foreground">Caption studio</span>
         </header>
         {missing.length > 0 && (
-          <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
+          <div className="border-b border-warn/40 bg-warn/10 px-4 py-2 text-sm text-warn">
             Not configured yet: {missing.join(', ')}. Add the missing keys to .env.local and restart
             the dev server.
           </div>

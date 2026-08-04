@@ -1,3 +1,8 @@
+/**
+ * Vendored from the cult-ui registry: https://cult-ui.com/r/cutout-card.json
+ * Edits against upstream: the `~/lib/utils.ts` import path, and CutoutCardImage
+ * renders a plain <img> because this app is Vite, not Next (see that component).
+ */
 "use client"
 
 import {
