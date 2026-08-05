@@ -58,14 +58,14 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
   return (
     // relative so a row's offsetTop is measured against this list rather than
     // some ancestor, which is what the scroll maths above assumes.
-    <div ref={listRef} className="relative max-h-[60vh] space-y-1 overflow-y-auto pr-1 xl:h-full xl:max-h-none">
+    <div ref={listRef} className="relative max-h-[60vh] space-y-0.5 overflow-y-auto pr-1 xl:h-full xl:max-h-none">
       {cues.map((cue, i) => (
         <div
           key={cue.id}
           data-cue-index={i}
           className={cn(
-            'group rounded-lg border p-2 transition-colors',
-            i === activeIdx ? 'border-foreground/60 bg-accent' : 'border-transparent hover:border-border',
+            'group rounded-md border border-transparent p-2 transition-colors',
+            i === activeIdx ? 'bg-surface-3' : 'hover:bg-surface-2',
           )}
         >
           <div className="flex items-center gap-1">

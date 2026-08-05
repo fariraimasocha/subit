@@ -28,8 +28,8 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
     // height, and a percentage height against an auto parent resolves to auto, so
     // h-full would let the panel overflow the cap instead of scrolling inside it.
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-medium">Caption style</h2>
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <h2 className="text-xs font-semibold tracking-[0.16em] text-text-muted">CAPTION STYLE</h2>
         <span className="text-xs text-muted-foreground">{theme.name}</span>
       </div>
 
@@ -44,10 +44,10 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
               onClick={() => onPreset(t)}
               aria-pressed={theme.id === t.id}
               className={cn(
-                'flex h-14 items-center justify-center rounded-lg border bg-video-surface px-1.5 transition-colors',
+                'flex h-14 items-center justify-center rounded-lg border bg-surface-1 px-1.5 transition-colors',
                 theme.id === t.id
-                  ? 'border-foreground ring-1 ring-foreground'
-                  : 'border-border hover:border-foreground/40',
+                  ? 'border-brand ring-1 ring-brand'
+                  : 'border-white/10 hover:border-white/20',
               )}
             >
               <span
@@ -96,7 +96,7 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
 
       {/* Two per row, so position and size sit side by side the way the whole
           nudge loop actually gets used. */}
-      <div className="shrink-0 space-y-3 border-t p-4">
+      <div className="shrink-0 space-y-3 border-t border-white/10 p-4">
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <Field label="Position" value={`${theme.positionPct.toFixed(0)} %`}>
             <Slider
@@ -149,7 +149,7 @@ export function StylePanel({ theme, onChange, onPreset, videoHeight }: Props) {
                 if (f) onChange({ fontFamily: f.family, fontFile: f.file })
               }}
             >
-              <SelectTrigger className="h-9 w-full">
+            <SelectTrigger className="h-9 w-full border-white/10 bg-surface-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -191,7 +191,7 @@ function Swatch({ label, value, onChange }: { label: string; value: string; onCh
         aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value.toUpperCase())}
-        className="h-9 w-full cursor-pointer rounded-md border bg-transparent p-1"
+        className="h-9 w-full cursor-pointer rounded-md border border-white/10 bg-transparent p-1"
       />
     </div>
   )

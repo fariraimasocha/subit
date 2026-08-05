@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { UploadCloud } from 'lucide-react'
 import { Button } from '~/components/ui/button.tsx'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
+import { cn } from '~/lib/utils.ts'
 import { qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
 import { createProjectFn, presign } from '~/server/api.ts'
@@ -94,60 +94,68 @@ function NewProject() {
         upload.mutate(file)
       }}
     >
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">New project</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">New project</h1>
+      <p className="mt-1.5 text-sm text-text-secondary">
+        Your clip is uploaded straight to R2, then Whisper transcribes it word by word.
+      </p>
+
       {known && (!ready || !config?.r2) && (
-        <div className="mb-6">
+        <div className="mt-6">
           <SetupNotice config={config} />
         </div>
       )}
-      <Card className={dragging ? 'border-foreground/60' : undefined}>
-        <CardHeader>
-          <CardTitle className="text-base">Upload a video</CardTitle>
-          <CardDescription>MP4 or MOV, up to 2 GB. Portrait or landscape both work.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => inputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center transition-colors hover:border-foreground/40 disabled:opacity-60"
-          >
-            <UploadCloud className="size-8 text-muted-foreground" />
-            <span className="text-sm">
-              {busy ? 'Uploading' : dragging ? 'Drop it here' : 'Drop a file here, or click to pick one'}
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className={cn(
+          'mt-6 flex w-full flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 bg-surface-1 px-6 py-16 text-center transition-colors hover:border-brand/60 disabled:opacity-60',
+          dragging && 'border-brand',
+        )}
+      >
+        <span className="flex size-12 items-center justify-center rounded-full bg-surface-3">
+          <UploadCloud className="size-5 text-brand" />
+        </span>
+        <span className="text-sm font-semibold">
+          {busy ? 'Uploading' : dragging ? 'Drop it here' : 'Drop a clip here or click to browse'}
+        </span>
+        <span className="text-xs text-text-muted">
+          MP4 or MOV, up to 2 GB. iPhone rotation handled automatically.
+        </span>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          // Reset so picking the same file twice fires change again.
+          e.target.value = ''
+          if (!file) return
+          // `accept` is only a hint: the picker still allows "All files".
+          if (!accepted(file)) return toast.error('Only MP4 and MOV files are supported')
+          upload.mutate(file)
+        }}
+      />
+
+      {pct !== null && (
+        <div className="mt-6 rounded-2xl border border-border/40 bg-surface-2 p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">
+              {pct < 100 ? 'Uploading to R2' : 'Uploaded, creating the project'}
             </span>
-          </button>
+            <span className="font-mono text-sm font-bold text-brand tabular-nums">{pct}%</span>
+          </div>
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+            <div className="h-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
 
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              // Reset so picking the same file twice fires change again.
-              e.target.value = ''
-              if (!file) return
-              // `accept` is only a hint: the picker still allows "All files".
-              if (!accepted(file)) return toast.error('Only MP4 and MOV files are supported')
-              upload.mutate(file)
-            }}
-          />
-
-          {pct !== null && (
-            <div className="mt-6">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full bg-foreground transition-[width]" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {pct < 100 ? `Uploading ${pct}%` : 'Uploaded, creating the project'}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-xs text-text-muted">
         Long videos are sliced into 10 minute chunks for transcription, so length is not a hard limit.
       </p>
 

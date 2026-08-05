@@ -16,9 +16,11 @@ function DashboardShell() {
   return (
     <SidebarShell>
       <>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        {/* The chrome stays darker than the workspace, while its separators are
+            intentionally quiet so they define structure without drawing focus. */}
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 bg-sidebar px-4">
           <SidebarTrigger />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-white/10" />
           <span className="text-sm text-muted-foreground">Caption studio</span>
         </header>
         {missing.length > 0 && (
@@ -27,7 +29,10 @@ function DashboardShell() {
             the dev server.
           </div>
         )}
-        <div className="flex-1 p-4 md:p-8">
+        {/* The .pen dashboard frames both carry this: a wide, very faint brand
+            wash off the top edge. It is what keeps the content plane from being
+            a flat black field next to the lighter chrome. */}
+        <div className="flex-1 bg-[radial-gradient(60rem_20rem_at_60%_0%,color-mix(in_oklab,var(--brand)_7%,transparent),transparent)] p-4 md:p-8">
           <Outlet />
         </div>
       </>

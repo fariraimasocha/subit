@@ -121,7 +121,10 @@ export async function normalize(srcUrl: string, cwd: string, out = 'norm.mp4') {
  * produces no frame at all, which is how a 0.4s test clip gets no poster.
  */
 export async function poster(input: string, cwd: string, durationSec: number, out = 'poster.jpg') {
-  const at = Math.max(0, Math.min(1, durationSec / 2))
+  // 10% in, so the poster is past any fade from black but still early enough to
+  // be the shot people remember. Clamped inside the clip: -ss past the end
+  // produces no frame at all, which is how a 0.4s test clip got no poster.
+  const at = Math.min(durationSec * 0.1, Math.max(0, durationSec - 0.1))
   await run(
     FFMPEG,
     ['-y', '-ss', String(at), '-i', input, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', out],

@@ -257,6 +257,13 @@ export const saveTheme = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+export const renameProjectFn = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string().min(1), name: z.string().trim().min(1).max(200) }))
+  .handler(async ({ data }) => {
+    await updateProject(data.id, { name: data.name })
+    return { name: data.name }
+  })
+
 export const retryIngest = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }) => {

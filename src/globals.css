@@ -94,7 +94,7 @@
   --text-muted: hsl(0 0% 40%);
   --border-1: hsl(0 0% 52%);
   /* The one accent. Focus rings, selected states, primary actions, playhead. */
-  --brand: hsl(258 78% 47%);
+  --brand: hsl(24 100% 36%);
   --brand-foreground: hsl(0 0% 100%);
   /*
    * Status, a separate axis from the accent. These are picked to be readable as
@@ -144,21 +144,35 @@
 }
 
 .dark {
-  /* Foundation, dark. The shipped look: near black page, raised surfaces. */
-  --bg: hsl(0 0% 6%);
-  --surface-1: hsl(0 0% 9%);
-  --surface-2: hsl(0 0% 12%);
-  --surface-3: hsl(0 0% 15%);
+  /*
+   * Foundation, dark. The shipped look: graphite near-black page with a faint
+   * cool cast, raised surfaces, one warm signal-orange accent. Matches the
+   * design file (design/subit.pen).
+   */
+  --bg: hsl(225 9% 10%);
+  --surface-1: hsl(225 10% 8%);
+  --surface-2: hsl(225 8% 12%);
+  --surface-3: hsl(220 8% 16%);
   --text-primary: hsl(0 0% 98%);
-  --text-secondary: hsl(0 0% 78%);
-  --text-muted: hsl(0 0% 68%);
-  --border-1: hsl(0 0% 44%);
-  --brand: hsl(258 90% 64%);
-  --brand-foreground: hsl(0 0% 100%);
+  --text-secondary: hsl(240 5% 74%);
+  --text-muted: hsl(240 5% 64%);
+  --border-1: hsl(220 6% 46%);
+  /* Signal orange. Dark text on the fill, like a record light. */
+  --brand: hsl(23 100% 58%);
+  --brand-foreground: hsl(240 8% 5%);
   --ok: hsl(152 60% 55%);
   --warn: hsl(38 95% 60%);
   --danger: hsl(0 85% 68%);
   --danger-foreground: hsl(0 0% 8%);
+
+  /*
+   * Three planes, not two: the sidebar and top bar are the darkest chrome,
+   * the workspace is a restrained step lighter, and cards sit one step above
+   * that. This keeps the work area distinct without turning it into a panel.
+   */
+  --sidebar: var(--surface-1);
+  --card: var(--surface-2);
+  --popover: var(--surface-2);
 }
 
 @theme inline {

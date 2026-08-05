@@ -108,8 +108,8 @@ export function Timeline({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex items-center gap-1 border-b px-3 py-2">
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-sidebar">
+      <div className="flex items-center gap-1 border-b border-white/10 px-3 py-2">
         <span className="text-sm font-medium">Timeline</span>
         <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">
           {fmt(dur)}
@@ -153,7 +153,7 @@ export function Timeline({
           </Button>
         )}
 
-        <div className="ml-1 flex items-center rounded-md border">
+        <div className="ml-1 flex items-center rounded-md border border-white/10">
           <Button size="icon" variant="ghost" className="size-8" aria-label="Zoom out" onClick={() => zoomBy(-1)}>
             <Minus className="size-4" />
           </Button>
@@ -165,8 +165,8 @@ export function Timeline({
 
       <div className="flex">
         {/* Lane names sit outside the scroller, so there is no scroll to sync. */}
-        <div className="shrink-0 border-r bg-muted/30" style={{ width: GUTTER_W }}>
-          <div className="border-b" style={{ height: RULER_H }} />
+        <div className="shrink-0 border-r border-white/10 bg-muted/30" style={{ width: GUTTER_W }}>
+          <div className="border-b border-white/10" style={{ height: RULER_H }} />
           <LaneLabel name="Captions" count={cues.length} height={LANE_H.cues} />
           <LaneLabel name="Images" count={overlays.length} height={LANE_H.images} />
         </div>
@@ -175,7 +175,7 @@ export function Timeline({
           <div className="relative" style={{ width }}>
             {/* Ruler: click or drag anywhere on it to scrub. */}
             <div
-              className="relative cursor-pointer border-b bg-muted/30 select-none"
+              className="relative cursor-pointer border-b border-white/10 bg-muted/30 select-none"
               style={{ height: RULER_H }}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId)
@@ -186,7 +186,7 @@ export function Timeline({
               {ticks(dur, pps).map((t) => (
                 <span
                   key={t}
-                  className="absolute top-0 flex items-center border-l border-border/70 pl-1.5 text-xs tabular-nums text-muted-foreground"
+                  className="absolute top-0 flex items-center border-l border-white/10 pl-1.5 text-xs tabular-nums text-muted-foreground"
                   style={{ left: t * pps, height: RULER_H }}
                 >
                   {label(t)}
@@ -261,7 +261,7 @@ export function Timeline({
 
 function LaneLabel({ name, count, height }: { name: string; count: number; height: number }) {
   return (
-    <div className="flex flex-col justify-center border-b px-3 last:border-b-0" style={{ height }}>
+    <div className="flex flex-col justify-center border-b border-white/10 px-3 last:border-b-0" style={{ height }}>
       <span className="text-xs font-medium">{name}</span>
       <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
     </div>
@@ -270,7 +270,7 @@ function LaneLabel({ name, count, height }: { name: string; count: number; heigh
 
 function Lane({ height, children }: { height: number; children: React.ReactNode }) {
   return (
-    <div className="relative border-b border-border/60 last:border-b-0" style={{ height }}>
+    <div className="relative border-b border-white/10 last:border-b-0" style={{ height }}>
       {children}
     </div>
   )

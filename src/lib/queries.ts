@@ -28,6 +28,12 @@ export const projectsQuery = (enabled = true) =>
     queryKey: qk.projects,
     queryFn: () => listProjectsFn(),
     enabled,
+    // A card that draws a progress bar has to actually move, so the list polls
+    // while anything on it is mid ingest and stops the moment nothing is. Same
+    // reasoning as projectQuery below, one level up.
+    refetchInterval: (q) =>
+      q.state.data?.some((p) => p.status === 'processing' || p.status === 'uploaded') ? 2000 : false,
+    refetchIntervalInBackground: true,
   })
 
 export const projectQuery = (id: string, enabled = true) =>

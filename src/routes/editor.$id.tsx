@@ -4,15 +4,12 @@ import { ArrowLeft, Download, Loader2, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { IngestProgress } from '~/components/ingest-progress.tsx'
-import { SidebarShell } from '~/components/sidebar-shell.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { StylePanel } from '~/components/style-panel.tsx'
 import { TranscriptPanel } from '~/components/transcript-panel.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
-import { SidebarTrigger } from '~/components/ui/sidebar.tsx'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs.tsx'
 import { Timeline } from '~/components/timeline.tsx'
 import { VideoPlayer } from '~/components/video-player.tsx'
 import type { Cue } from '~/lib/cues.ts'
@@ -239,8 +236,7 @@ function Editor() {
     <Shell>
       {/* Editor chrome, not page content: the actions stay reachable while the
           preset list and the transcript scroll underneath. */}
-      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
-        <SidebarTrigger />
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-white/10 bg-sidebar px-5">
         <Button asChild size="icon" variant="ghost" aria-label="Back to projects">
           <Link to="/dashboard/projects">
             <ArrowLeft className="size-4" />
@@ -284,7 +280,7 @@ function Editor() {
       {/* At xl the editor stops being a scrolling page: three columns, each
           scrolling internally, so the preview never leaves the screen while it
           plays. Narrower than that it stays a normal stacked page. */}
-      <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden">
+      <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden xl:p-0">
       {exportStalled && (
         <Card className="mb-6 overflow-hidden border-l-4 border-l-brand">
           <CardHeader>
@@ -325,14 +321,14 @@ function Editor() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:min-h-0 xl:grid-cols-[340px_minmax(0,1fr)_minmax(300px,360px)] xl:grid-rows-[minmax(0,1fr)] xl:items-stretch">
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:min-h-0 xl:grid-cols-[360px_minmax(0,1fr)_320px] xl:grid-rows-[minmax(0,1fr)] xl:gap-0 xl:items-stretch">
         {/* Fixed-height so the panel's own footer pins the controls rather than
             the page scrolling them away. */}
         {/* max-h, not h: forcing full height leaves dead space between the last
             toggle and the pinned footer whenever the presets do not fill the
             column. Capping instead lets the panel shrink to its content and
             only pin once the list actually overflows. */}
-        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:max-h-[calc(100dvh_-_6.5rem)] xl:static xl:row-span-1 xl:max-h-full xl:min-h-0 xl:self-start">
+        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:max-h-[calc(100dvh_-_6.5rem)] xl:static xl:col-start-3 xl:row-start-1 xl:row-span-1 xl:max-h-full xl:min-h-0 xl:self-auto xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l-white/10 xl:bg-sidebar">
           <StylePanel
             theme={theme}
             videoHeight={project.height ?? 1080}
@@ -347,7 +343,7 @@ function Editor() {
           />
         </Card>
 
-        <div className="space-y-6 xl:min-h-0">
+        <div className="space-y-6 xl:col-start-2 xl:row-start-1 xl:min-h-0 xl:space-y-0 xl:bg-video-surface xl:p-6">
           {project.norm_url && project.width && project.height ? (
             <>
               <VideoPlayer
@@ -386,31 +382,22 @@ function Editor() {
 
         </div>
 
-        <Tabs
-          defaultValue="transcript"
-          className="lg:col-start-2 xl:col-start-3 xl:row-start-1 xl:flex xl:min-h-0 xl:flex-col"
-        >
-            <TabsList>
-              <TabsTrigger value="transcript">Transcript</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-            </TabsList>
-            <TabsContent value="transcript" className="mt-4 xl:min-h-0 xl:flex-1">
-              <TranscriptPanel
-                cues={project.cues}
-                currentTime={currentTime}
-                onChange={(cues) => persistCues.mutate(cues)}
-                onSeek={(t) => {
-                  if (videoRef.current) videoRef.current.currentTime = t
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="details" className="mt-4 space-y-1 text-sm text-muted-foreground">
-              <p>Cues: {project.cues.length}</p>
-              <p>Duration: {project.duration ? `${project.duration.toFixed(1)}s` : 'unknown'}</p>
-              <p>Frame: {project.width && project.height ? `${project.width} x ${project.height}` : 'unknown'}</p>
-              <p>Created: {new Date(project.created_at).toLocaleString()}</p>
-            </TabsContent>
-        </Tabs>
+        <aside className="lg:col-start-2 xl:col-start-1 xl:row-start-1 xl:flex xl:min-h-0 xl:flex-col xl:border-r xl:border-white/10 xl:bg-background">
+          <header className="flex h-12 shrink-0 items-center justify-between px-4">
+            <h2 className="text-xs font-semibold tracking-[0.16em] text-text-muted">TRANSCRIPT</h2>
+            <span className="font-mono text-xs text-text-muted">{project.cues.length} cues</span>
+          </header>
+          <div className="min-h-0 flex-1 px-3 pb-3">
+            <TranscriptPanel
+              cues={project.cues}
+              currentTime={currentTime}
+              onChange={(cues) => persistCues.mutate(cues)}
+              onSeek={(t) => {
+                if (videoRef.current) videoRef.current.currentTime = t
+              }}
+            />
+          </div>
+        </aside>
       </div>
       </div>
     </Shell>
@@ -423,20 +410,7 @@ function Pad({ children }: { children: React.ReactNode }) {
 
 /** The editor sits inside the same nav shell as the dashboard. */
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <SidebarShell>
-      {/*
-        h-dvh, not flex-1: a flex item's `flex-basis: 0%` overrides `height`, so
-        the viewport boundary has to be a real height here. Without it every
-        `h-full` below resolves against an auto-sized row and the columns just
-        grow to fit their content, which is how the style panel's pinned footer
-        ended up below the fold once there were eighteen presets.
-      */}
-      <div className="flex min-h-0 flex-1 flex-col xl:h-dvh xl:flex-none xl:overflow-hidden">
-        {children}
-      </div>
-    </SidebarShell>
-  )
+  return <div className="flex min-h-[100dvh] flex-col bg-background xl:h-dvh xl:min-h-0 xl:overflow-hidden">{children}</div>
 }
 
 function Msg({ title, body }: { title: string; body: string }) {

@@ -4,12 +4,13 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table'
-import { Clapperboard, Trash2, Upload } from 'lucide-react'
+import { Clapperboard, Search, Trash2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { StatusBadge } from '~/components/status-badge.tsx'
@@ -41,6 +42,7 @@ function Projects() {
   const { config, ready, known } = useConfig()
   const { data, isPending, error } = useQuery(projectsQuery(ready))
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
+  const [search, setSearch] = useState('')
   // Deleting drops the row and the video with it, so it asks first.
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null)
 
@@ -102,9 +104,15 @@ function Projects() {
   const table = useReactTable({
     data: data ?? [],
     columns,
-    state: { sorting },
+    state: { sorting, globalFilter: search },
     onSortingChange: setSorting,
+    onGlobalFilterChange: setSearch,
+    // Name is the only column anyone searches by; matching against status or a
+    // date string would make the filter feel haunted.
+    globalFilterFn: (row, _id, value: string) =>
+      row.original.name.toLowerCase().includes(value.toLowerCase()),
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 10 } },
@@ -123,7 +131,27 @@ function Projects() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+        <div className="flex items-center gap-2.5">
+          <label className="flex h-9 w-56 items-center gap-2 rounded-lg border border-border/40 bg-surface-2 px-3">
+            <Search className="size-4 shrink-0 text-text-muted" aria-hidden />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search projects..."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-text-muted"
+            />
+          </label>
+          <Button asChild className="shadow-lg shadow-brand/25">
+            <Link to="/dashboard/new">
+              <Upload className="size-4" />
+              New upload
+            </Link>
+          </Button>
+        </div>
+      </header>
 
       {known && !ready ? (
         <SetupNotice config={config} />
@@ -147,8 +175,8 @@ function Projects() {
         />
       ) : (
         <>
-          <div className="rounded-xl border">
-            <Table>
+          <div className="rounded-xl border border-white/10">
+            <Table className="[&_tr]:border-white/10">
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
                   <TableRow key={hg.id}>
@@ -199,7 +227,7 @@ function Projects() {
       )}
 
       <Dialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
-        <DialogContent>
+        <DialogContent className="border-white/10 bg-surface-1 shadow-2xl shadow-black/40">
           <DialogHeader>
             <DialogTitle>Delete this project?</DialogTitle>
             <DialogDescription>
@@ -208,10 +236,16 @@ function Projects() {
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Keep it</Button>
+              <Button
+                variant="outline"
+                className="border-white/10 bg-surface-3 shadow-none hover:bg-surface-2 dark:border-white/10 dark:bg-surface-3 dark:hover:bg-surface-2"
+              >
+                Keep it
+              </Button>
             </DialogClose>
             <Button
               variant="destructive"
+              className="border border-danger/30 bg-danger text-danger-foreground hover:bg-danger/90 dark:bg-danger"
               disabled={remove.isPending}
               onClick={() => pendingDelete && remove.mutate(pendingDelete.id)}
             >

@@ -68,15 +68,17 @@ export function AppSidebar() {
   const [recentOpen, setRecentOpen] = useState(true)
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="border-white/10">
       <SidebarHeader>
         <Link
           to="/"
           className="flex items-center gap-2.5 px-2 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
-          <Captions className="size-5 shrink-0" />
-          <span className="truncate text-base font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            Subit
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
+            <Captions className="size-4" />
+          </span>
+          <span className="truncate font-mono text-base font-bold tracking-tight group-data-[collapsible=icon]:hidden">
+            subit
           </span>
         </Link>
       </SidebarHeader>
@@ -149,7 +151,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto border-t border-sidebar-border p-0">
+      <SidebarFooter className="mt-auto border-t border-white/10 p-0">
         <div className="flex items-center justify-between px-3 py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
           <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
             v{__APP_VERSION__}
