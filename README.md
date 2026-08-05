@@ -7,6 +7,12 @@ with the captions baked into the pixels.
 The editor preview and the exported file share one positioning formula, so what
 you see is what gets burned.
 
+![Landing page](public/hero.png)
+
+![Dashboard with recent projects](public/home.png)
+
+![Editor: transcript, preview, caption styles, timeline](public/project.png)
+
 ```sh
 pnpm install
 pnpm dev        # http://localhost:3000
