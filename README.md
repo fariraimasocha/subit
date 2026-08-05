@@ -14,8 +14,18 @@ you see is what gets burned.
 ![Editor: transcript, preview, caption styles, timeline](public/project.png)
 
 ```sh
+git clone https://github.com/fariraimasocha/subit.git
+cd subit
 pnpm install
 pnpm dev        # http://localhost:3000
+```
+
+That gets the app up, but uploads and transcription need credentials. Full
+walkthrough in [Setup](#setup).
+
+Other scripts:
+
+```sh
 pnpm test       # node:test, no test framework
 pnpm typecheck
 pnpm build && pnpm start
@@ -172,6 +182,31 @@ Everything below is optional:
 
 A fresh clone with missing credentials explains itself: the dashboard renders a
 setup checklist instead of a failed request. See `src/components/setup-notice.tsx`.
+
+### 5. Run it
+
+```sh
+pnpm install
+pnpm dev
+```
+
+Open http://localhost:3000. The dashboard should show an empty project list, not
+the setup checklist. If the checklist is still there, a variable in
+`.env.local` is missing or misspelled; the checklist names which one.
+
+Then upload a short clip end to end. That one pass exercises every credential:
+
+| It fails at | Look at |
+| --- | --- |
+| Upload, no server log | R2 CORS rules, and that `AllowedOrigins` includes `http://localhost:3000` |
+| Upload, 403 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, and that the token covers this bucket |
+| Normalising | ffmpeg on `PATH`, or set `FFMPEG_BIN` / `FFPROBE_BIN` |
+| Transcribing | `GROQ_API_KEY` |
+| Saving the project | `CLOUDFLARE_API_TOKEN` (needs D1 Edit), `D1_DATABASE_ID`, and the `projects` table from step 2 |
+| Export | `ffmpeg -filters \| grep -c subtitles` printing 0, so libass is missing |
+
+Ingest and export run detached from the request, so the server has to stay up.
+Restarting it mid-job loses the job; the editor offers a Retry.
 
 ## How a video moves through
 
