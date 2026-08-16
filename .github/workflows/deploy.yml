@@ -14,10 +14,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - name: Deploy Worker
+      - name: Deploy Worker and container
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --containers-rollout=immediate
           wranglerVersion: '4.119.0'
+          # The action infers pnpm from pnpm-lock.yaml, but the runner has no
+          # pnpm binary. Wrangler itself is enough; the image builds inside Docker.
+          packageManager: npm
