@@ -4,32 +4,14 @@ import { SidebarShell } from '~/components/sidebar-shell.tsx'
 import { Separator } from '~/components/ui/separator.tsx'
 import { SidebarTrigger } from '~/components/ui/sidebar.tsx'
 import { configQuery } from '~/lib/queries.ts'
+import { getSession } from '~/lib/auth-fns.ts'
 import { readBrowserSession } from '~/lib/session.ts'
-import { getSession } from '~/server/auth.server.ts'
 import { UserMenu } from '~/components/user-menu.tsx'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: async () => {
-    const started = Date.now()
     const session =
       typeof window === 'undefined' ? await getSession() : await readBrowserSession()
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7573/ingest/9119238e-d35c-4221-b9d4-77a9e6ffca99', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aa72d7' },
-        body: JSON.stringify({
-          sessionId: 'aa72d7',
-          runId: 'freeze-2',
-          hypothesisId: 'L',
-          location: 'dashboard.tsx:beforeLoad',
-          message: 'client beforeLoad session',
-          data: { hasUser: Boolean(session?.user), ms: Date.now() - started },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-    }
-    // #endregion
     if (!session?.user) {
       throw redirect({ to: '/sign-in' })
     }
