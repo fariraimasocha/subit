@@ -1,7 +1,12 @@
-import * as React from "react"
-import { Slider as SliderPrimitive } from "radix-ui"
+import * as React from 'react'
+import { Slider as SliderPrimitive } from '@cloudflare/kumo/primitives/slider'
+import { cn } from '~/lib/utils'
 
-import { cn } from "~/lib/utils"
+type SliderProps = Omit<React.ComponentProps<typeof SliderPrimitive.Root>, 'onValueChange' | 'value' | 'defaultValue'> & {
+  value?: number[]
+  defaultValue?: number[]
+  onValueChange?: (value: number[]) => void
+}
 
 function Slider({
   className,
@@ -9,51 +14,43 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  onValueChange,
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
-  const _values = React.useMemo(
-    () =>
-      Array.isArray(value)
-        ? value
-        : Array.isArray(defaultValue)
-          ? defaultValue
-          : [min, max],
-    [value, defaultValue, min, max]
+}: SliderProps) {
+  const values = React.useMemo(
+    () => (Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min]),
+    [value, defaultValue, min],
   )
+
+  const handleChange = (next: number | readonly number[] | number[]) => {
+    if (typeof next === 'number') {
+      onValueChange?.([next])
+      return
+    }
+    onValueChange?.([...next])
+  }
 
   return (
     <SliderPrimitive.Root
-      data-slot="slider"
+      value={values}
       defaultValue={defaultValue}
-      value={value}
       min={min}
       max={max}
-      className={cn(
-        "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
-        className
-      )}
+      onValueChange={handleChange}
+      className={cn('relative flex w-full touch-none items-center select-none', className)}
       {...props}
     >
-      <SliderPrimitive.Track
-        data-slot="slider-track"
-        className={cn(
-          "relative grow overflow-hidden rounded-full bg-muted data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
-        )}
-      >
-        <SliderPrimitive.Range
-          data-slot="slider-range"
-          className={cn(
-            "absolute bg-primary data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
-          )}
-        />
-      </SliderPrimitive.Track>
-      {Array.from({ length: _values.length }, (_, index) => (
-        <SliderPrimitive.Thumb
-          data-slot="slider-thumb"
-          key={index}
-          className="block size-4 shrink-0 rounded-full border-2 border-brand bg-background shadow-sm ring-ring/50 transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
-        />
-      ))}
+      <SliderPrimitive.Control className="relative flex w-full grow items-center">
+        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-muted">
+          <SliderPrimitive.Indicator className="absolute h-full bg-brand" />
+        </SliderPrimitive.Track>
+        {values.map((_, index) => (
+          <SliderPrimitive.Thumb
+            key={index}
+            className="block size-4 shrink-0 rounded-full border-2 border-brand bg-background shadow-sm focus-visible:outline-2 focus-visible:outline-brand"
+          />
+        ))}
+      </SliderPrimitive.Control>
     </SliderPrimitive.Root>
   )
 }

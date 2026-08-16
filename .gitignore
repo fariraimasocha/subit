@@ -2,3 +2,9 @@ node_modules
 dist
 .env.local
 .tanstack
+auth.db
+.DS_Store
+.cursor
+.agents
+.aidesigner/*
+!.aidesigner/.gitkeep

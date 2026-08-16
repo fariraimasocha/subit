@@ -7,6 +7,7 @@ export const qk = {
   project: (id: string) => ['project', id] as const,
   job: (jobId: string) => ['job', jobId] as const,
   config: ['config'] as const,
+  session: ['session'] as const,
 }
 
 export const configQuery = () =>

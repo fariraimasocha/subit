@@ -1,7 +1,8 @@
-import { ChevronDown, Eye, Maximize2, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
+import { ChevronDown, Eye, Maximize2, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CaptionOverlay } from '~/components/caption-overlay.tsx'
 import { ImageOverlay } from '~/components/image-overlay.tsx'
+import { TextOverlay } from '~/components/text-overlay.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Label } from '~/components/ui/label.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover.tsx'
@@ -27,6 +28,8 @@ type Props = {
   onPositionCommit?: (pct: number) => void
   /** Persist an image moved or resized on the preview. */
   onOverlayCommit?: (o: Overlay) => void
+  /** Timeline sits between the preview and the transport, matching the reference workspace. */
+  children?: React.ReactNode
 }
 
 const ASPECTS: { value: Aspect; label: string }[] = [
@@ -38,14 +41,7 @@ const ASPECTS: { value: Aspect; label: string }[] = [
 
 const RATIOS: Record<Exclude<Aspect, 'source'>, number> = { '9:16': 9 / 16, '1:1': 1, '16:9': 16 / 9 }
 const SPEEDS = [0.5, 1, 1.5, 2]
-
-/**
- * Everything stacked above and below the preview that also has to fit on
- * screen: the editor header, the page padding, the frame control row, the
- * transport row, the timeline and the gaps between them. Overshooting only
- * shrinks the preview slightly; undershooting pushes the timeline off the
- * bottom.
- */
+/** Header, timeline, transport. Same budget the preview used before the slot fill. */
 const CHROME_PX = 400
 
 export function VideoPlayer({
@@ -59,25 +55,42 @@ export function VideoPlayer({
   onTimeChange,
   onPositionCommit,
   onOverlayCommit,
+  children,
 }: Props) {
+  const slotRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const [slot, setSlot] = useState({ w: 0, h: 0 })
   const [boxHeight, setBoxHeight] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(1)
   const [speed, setSpeed] = useState(1)
   const { aspect, setAspect, captionsVisible, setCaptionsVisible } = useEditor()
 
-  // Letterboxing would make the measured height wrong, so it is killed
-  // structurally: the wrapper owns the aspect ratio and the video fills it.
-  // One ResizeObserver then reports the true painted height.
+  // The preview slot is the remaining column after the timeline and transport
+  // take their height. Size the video from those measured pixels, not cqh:
+  // @container is inline-size only, so 100cqh was 0 and a 9:16 clip took the
+  // full column width, then aspect-ratio pushed it down through the timeline.
   useLayoutEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => setBoxHeight(entry.contentRect.height))
-    ro.observe(el)
-    setBoxHeight(el.getBoundingClientRect().height)
+    const slotEl = slotRef.current
+    const wrapEl = wrapRef.current
+    if (!slotEl) return
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === slotEl) {
+          setSlot({ w: entry.contentRect.width, h: entry.contentRect.height })
+        }
+        if (entry.target === wrapEl) {
+          setBoxHeight(entry.contentRect.height)
+        }
+      }
+    })
+    ro.observe(slotEl)
+    if (wrapEl) ro.observe(wrapEl)
+    setSlot({ w: slotEl.clientWidth, h: slotEl.clientHeight })
+    if (wrapEl) setBoxHeight(wrapEl.clientHeight)
     return () => ro.disconnect()
   }, [])
 
@@ -110,29 +123,22 @@ export function VideoPlayer({
     if (videoRef.current) videoRef.current.currentTime = t
     setTime(t)
   }
+  const skip = (dt: number) => seek(Math.min(Math.max((videoRef.current?.currentTime ?? 0) + dt, 0), duration || 0))
 
   const ratio = aspect === 'source' ? width / height : RATIOS[aspect]
+  // Fit the whole frame inside the slot, then cap to the old viewport budget so
+  // a tall leftover column cannot stretch a 9:16 clip into a cropped landscape box.
+  const viewportH = typeof window === 'undefined' ? 800 : window.innerHeight
+  const maxH = Math.max(160, Math.min(slot.h || viewportH, viewportH - CHROME_PX))
+  const previewWidth = Math.min(slot.w || maxH * ratio, maxH * ratio)
 
   return (
-    <div className="space-y-3">
-      {/*
-        The box is sized by capping its WIDTH, because aspect-ratio then derives
-        the height, and an over-tall preview is the failure mode that matters: a
-        9:16 clip is 1.78x taller than it is wide. width = height * ratio, so to
-        keep the height inside the viewport the width cap has to be the
-        available height times the ratio. Deriving the cap from a flat fraction
-        of vh instead gave a 9:16 box 105vh tall, pushing its own transport
-        controls off the bottom of the screen.
-      */}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
-        className="mx-auto w-full"
-        style={{
-          // The max() floor matters: below CHROME_PX of viewport the calc goes
-          // negative and the preview would collapse to nothing. Better to
-          // overflow and let the page scroll than to vanish.
-          maxWidth: `min(100%, max(220px, calc((100dvh - ${CHROME_PX}px) * ${ratio})))`,
-        }}
+        ref={slotRef}
+        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pt-4"
       >
+        <div className="max-w-full" style={{ width: `${previewWidth}px` }}>
         <div
           ref={wrapRef}
           className="relative w-full overflow-hidden rounded-xl bg-black"
@@ -154,38 +160,29 @@ export function VideoPlayer({
             duration={duration}
             onCommit={onOverlayCommit}
           />
+          <TextOverlay
+            videoRef={videoRef}
+            overlays={overlays}
+            boxHeight={boxHeight}
+            duration={duration}
+            onCommit={onOverlayCommit}
+          />
           <CaptionOverlay
             videoRef={videoRef}
             cues={cues}
-            theme={theme}
             boxHeight={boxHeight}
             visible={captionsVisible}
             onCommit={onPositionCommit}
           />
         </div>
+        </div>
       </div>
 
-      {/* Frame controls: what the video looks like, not where it is playing. */}
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 px-4 pt-2">
         <Menu label={aspect === 'source' ? 'Source' : aspect}>
           {ASPECTS.map((a) => (
             <MenuItem key={a.value} active={aspect === a.value} onClick={() => setAspect(a.value)}>
               {a.label}
-            </MenuItem>
-          ))}
-        </Menu>
-
-        <Menu label={`${speed}x`}>
-          {SPEEDS.map((s) => (
-            <MenuItem
-              key={s}
-              active={speed === s}
-              onClick={() => {
-                setSpeed(s)
-                if (videoRef.current) videoRef.current.playbackRate = s
-              }}
-            >
-              {s}x
             </MenuItem>
           ))}
         </Menu>
@@ -222,19 +219,6 @@ export function VideoPlayer({
         <Button
           size="sm"
           variant="ghost"
-          aria-label={muted ? 'Unmute' : 'Mute'}
-          onClick={() => {
-            const next = !muted
-            setMuted(next)
-            if (videoRef.current) videoRef.current.muted = next
-          }}
-        >
-          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-        </Button>
-
-        <Button
-          size="sm"
-          variant="ghost"
           aria-label="Fullscreen"
           onClick={() => videoRef.current?.requestFullscreen?.()}
         >
@@ -242,24 +226,86 @@ export function VideoPlayer({
         </Button>
       </div>
 
-      {/* Transport: play head and time. */}
-      <div className="flex items-center gap-3">
-        <Button size="icon" variant="secondary" aria-label={playing ? 'Pause' : 'Play'} onClick={toggle}>
-          {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
-        </Button>
+      {children}
 
-        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-          {fmt(time)} / {fmt(duration)}
-        </span>
-
+      <div className="shrink-0 space-y-2 border-t border-white/10 px-4 py-3">
         <Slider
-          className="flex-1"
           min={0}
           max={Math.max(duration, 0.1)}
           step={0.01}
           value={[time]}
           onValueChange={([v]) => seek(v)}
         />
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8"
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              onClick={() => {
+                const next = !muted
+                setMuted(next)
+                if (videoRef.current) videoRef.current.muted = next
+              }}
+            >
+              {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+            </Button>
+            <Slider
+              className="hidden max-w-24 sm:flex"
+              min={0}
+              max={1}
+              step={0.01}
+              value={[muted ? 0 : volume]}
+              onValueChange={([v]) => {
+                setVolume(v)
+                setMuted(v === 0)
+                if (videoRef.current) {
+                  videoRef.current.volume = v
+                  videoRef.current.muted = v === 0
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button size="icon" variant="ghost" className="size-8" aria-label="Back two seconds" onClick={() => skip(-2)}>
+              <SkipBack className="size-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="size-11 rounded-full"
+              aria-label={playing ? 'Pause' : 'Play'}
+              onClick={toggle}
+            >
+              {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
+            </Button>
+            <Button size="icon" variant="ghost" className="size-8" aria-label="Forward two seconds" onClick={() => skip(2)}>
+              <SkipForward className="size-4" />
+            </Button>
+            <span className="ml-1 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+              {fmt(time)} / {fmt(duration)}
+            </span>
+          </div>
+
+          <div className="flex flex-1 items-center justify-end">
+            <Menu label={`${speed}x`}>
+              {SPEEDS.map((s) => (
+                <MenuItem
+                  key={s}
+                  active={speed === s}
+                  onClick={() => {
+                    setSpeed(s)
+                    if (videoRef.current) videoRef.current.playbackRate = s
+                  }}
+                >
+                  {s}x
+                </MenuItem>
+              ))}
+            </Menu>
+          </div>
+        </div>
       </div>
     </div>
   )

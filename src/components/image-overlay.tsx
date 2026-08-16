@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { clampOverlay, type Overlay } from '~/lib/overlays.ts'
+import { clampOverlay, isImageOverlay, type Overlay } from '~/lib/overlays.ts'
 import { useEditor } from '~/store/editor.ts'
 
 type Props = {
@@ -29,6 +29,8 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
   // Resolved once on pointerdown, like the caption drag. `id` is the pointerId,
   // which is what stops a second finger hijacking the first one's drag.
   const drag = useRef<{ id: number; mode: 'move' | 'size'; box: DOMRect; o: Overlay } | null>(null)
+  const images = overlays.filter(isImageOverlay)
+  const draggable = Boolean(onCommit)
 
   useEffect(() => {
     let raf = 0
@@ -47,9 +49,7 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [videoRef, overlays])
-
-  const draggable = Boolean(onCommit)
+  }, [videoRef, images])
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, o: Overlay, mode: 'move' | 'size') => {
     // Left button only: a right click would start a drag the context menu then
@@ -88,7 +88,7 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
 
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-0 overflow-hidden">
-      {overlays.map((o) => {
+      {images.map((o) => {
         const selected = draggable && o.id === selectedOverlayId
         return (
           <div

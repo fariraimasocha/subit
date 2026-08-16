@@ -26,6 +26,7 @@ export type ProjectRow = {
   id: string
   name: string
   status: ProjectStatus
+  user_id: string
   src_key: string
   norm_key: string | null
   norm_url: string | null

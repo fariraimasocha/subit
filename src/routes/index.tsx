@@ -3,6 +3,7 @@ import { ArrowRight, Captions, Clapperboard, Pencil, Upload } from 'lucide-react
 import { GitHubStars } from '~/components/github-stars.tsx'
 import { Badge } from '~/components/ui/badge.tsx'
 import { Button } from '~/components/ui/button.tsx'
+import { authClient } from '~/lib/auth-client.ts'
 import { THEMES } from '~/lib/theme.ts'
 
 export const Route = createFileRoute('/')({ component: Landing })
@@ -29,9 +30,11 @@ const STEPS = [
 ] as const
 
 function Landing() {
+  const { data: session } = authClient.useSession()
+  const signedIn = Boolean(session?.user)
+
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background">
-      {/* Faint signal-orange glow bleeding from the top, so the page is not dead flat. */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[60rem] -translate-x-1/2 rounded-full bg-brand/15 blur-[140px]"
@@ -52,9 +55,20 @@ function Landing() {
             How it works
           </a>
           <GitHubStars />
-          <Button asChild size="sm">
-            <Link to="/dashboard">Open dashboard</Link>
-          </Button>
+          {signedIn ? (
+            <Button asChild size="sm">
+              <a href="/dashboard">Dashboard</a>
+            </Button>
+          ) : (
+            <>
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/sign-in">Sign in</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to="/sign-up">Sign up</Link>
+              </Button>
+            </>
+          )}
         </div>
       </header>
 
@@ -77,19 +91,29 @@ function Landing() {
         </p>
 
         <div className="mt-9 flex justify-center gap-3">
-          <Button asChild size="lg" className="shadow-lg shadow-brand/25">
-            <Link to="/dashboard/new">
-              Start captioning
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link to="/dashboard">See your projects</Link>
-          </Button>
+          {signedIn ? (
+            <Button asChild size="lg" className="shadow-lg shadow-brand/25">
+              <a href="/dashboard">
+                Go to dashboard
+                <ArrowRight className="size-4" />
+              </a>
+            </Button>
+          ) : (
+            <>
+              <Button asChild size="lg" className="shadow-lg shadow-brand/25">
+                <Link to="/sign-up">
+                  Start captioning
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link to="/sign-in">See your projects</Link>
+              </Button>
+            </>
+          )}
         </div>
       </section>
 
-      {/* The product, not a screenshot: the real caption presets that ship in the editor. */}
       <section className="relative mx-auto max-w-5xl px-6 pb-24">
         <div className="rounded-3xl border border-border/35 bg-surface-1/80 p-2 shadow-2xl shadow-black/50">
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-1 p-2 sm:grid-cols-5">
@@ -153,12 +177,21 @@ function Landing() {
           <p className="mt-4 text-text-secondary">
             Open source. Self-hosted. No watermark, no subscription.
           </p>
-          <Button asChild size="lg" className="mt-8 shadow-lg shadow-brand/25">
-            <Link to="/dashboard/new">
-              Start captioning
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
+          <div className="mt-8 flex justify-center">
+            <Button asChild size="lg" className="shadow-lg shadow-brand/25">
+              {signedIn ? (
+                <a href="/dashboard">
+                  Go to dashboard
+                  <ArrowRight className="size-4" />
+                </a>
+              ) : (
+                <Link to="/sign-up">
+                  Start captioning
+                  <ArrowRight className="size-4" />
+                </Link>
+              )}
+            </Button>
+          </div>
         </div>
       </section>
 

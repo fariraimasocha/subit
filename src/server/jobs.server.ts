@@ -2,10 +2,11 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { toAss } from '~/lib/ass.ts'
 import { groupWords } from '~/lib/cues.ts'
-import { overlayFilter } from '~/lib/overlays.ts'
+import { isImageOverlay, isTextOverlay, overlayFilter } from '~/lib/overlays.ts'
 import type { IngestStage } from '~/lib/project.ts'
 import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
-import { getProject, updateProject } from './d1.server.ts'
+import { agentLog } from './debug-log.server.ts'
+import { getProjectInternal, updateProject } from './d1.server.ts'
 import { burn, cleanJobDir, hasAudio, makeJobDir, normalize, poster, probe } from './ffmpeg.server.ts'
 import { transcribe } from './groq.server.ts'
 import { buildKey, deleteObject, exportKeyOf, presignGetUrl, publicUrl, putObject } from './r2.server.ts'
@@ -29,7 +30,7 @@ const FONTS_DIR = path.resolve(process.cwd(), 'public/fonts')
 export async function runIngest(projectId: string) {
   const dir = await makeJobDir()
   try {
-    const project = await getProject(projectId)
+    const project = await getProjectInternal(projectId)
     if (!project) throw new Error('project not found')
     const stage = (s: IngestStage) => updateProject(projectId, { status: 'processing', error: null, stage: s })
     await stage('normalising')
@@ -100,15 +101,22 @@ async function download(url: string, to: string) {
   await writeFile(to, new Uint8Array(await res.arrayBuffer()))
 }
 
-export async function runExport(projectId: string, jobId: string) {
+export async function runExport(projectId: string, jobId: string, themeOverride?: Theme) {
   const dir = await makeJobDir()
   jobs.set(jobId, { status: 'running', pct: 0 })
   try {
-    const project = await getProject(projectId)
+    const project = await getProjectInternal(projectId)
     if (!project) throw new Error('project not found')
     if (!project.norm_key || !project.width || !project.height) throw new Error('project has not finished processing')
 
-    const theme: Theme = project.theme ?? DEFAULT_THEME
+    const theme: Theme = themeOverride ?? project.theme ?? DEFAULT_THEME
+    agentLog({
+      location: 'jobs.server.ts:runExport',
+      message: 'export burn theme',
+      data: { themeId: theme.id, themeName: theme.name, boxColor: theme.boxColor, fromOverride: Boolean(themeOverride) },
+      hypothesisId: 'H',
+      runId: 'post-fix-7',
+    })
     await updateProject(projectId, { status: 'exporting', error: null })
 
     const normUrl = await presignGetUrl(project.norm_key)
@@ -117,22 +125,50 @@ export async function runExport(projectId: string, jobId: string) {
     await download(normUrl, path.join(dir, 'norm.mp4'))
 
     const hasCues = project.cues.length > 0
+    const images = project.overlays.filter(isImageOverlay)
+    const textFonts = [...new Set(project.overlays.filter(isTextOverlay).map((o) => o.fontFile))]
+    if (hasCues || textFonts.length > 0) {
+      await mkdir(path.join(dir, 'fonts'), { recursive: true })
+    }
     if (hasCues) {
       // PlayResX/PlayResY come from the same probe that produced the file being
       // burned. Never let a caller pass them in separately.
-      await writeFile(path.join(dir, 'cues.ass'), toAss(project.cues, theme, project.width, project.height), 'utf8')
+      const assContent = toAss(project.cues, theme, project.width, project.height)
+      await writeFile(path.join(dir, 'cues.ass'), assContent, 'utf8')
+      const styleParts = assContent.split('\n').find((l) => l.startsWith('Style: Main'))?.split(',') ?? []
+      agentLog({
+        location: 'jobs.server.ts:runExport',
+        message: 'ass style written',
+        data: {
+          themeId: theme.id,
+          borderStyle: styleParts[15],
+          outlinePx: styleParts[16],
+          backColour: styleParts[6],
+          fromOverride: Boolean(themeOverride),
+        },
+        hypothesisId: 'H',
+        runId: 'post-fix-7',
+      })
 
       // fontsdir matches the font's INTERNAL family name, not the filename. Copy
       // the TTF into jobDir/fonts so the spawn cwd relative path works.
-      await mkdir(path.join(dir, 'fonts'), { recursive: true })
       await copyFile(path.join(FONTS_DIR, theme.fontFile), path.join(dir, 'fonts', theme.fontFile))
+    }
+    for (const file of textFonts) {
+      if (hasCues && file === theme.fontFile) continue
+      await copyFile(path.join(FONTS_DIR, file), path.join(dir, 'fonts', file))
     }
 
     // The graph names its inputs ov0, ov1, ... and ffmpeg opens them by index,
     // so the download order below has to stay the array order.
-    const { filter, inputs } = overlayFilter(project.overlays, hasCues ? 'cues.ass' : null, project.width)
+    const { filter, inputs } = overlayFilter(
+      project.overlays,
+      hasCues ? 'cues.ass' : null,
+      project.width,
+      project.height,
+    )
     for (const [i, name] of inputs.entries()) {
-      await download(await presignGetUrl(project.overlays[i].key), path.join(dir, name))
+      await download(await presignGetUrl(images[i].key), path.join(dir, name))
     }
 
     const out = await burn({

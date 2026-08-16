@@ -18,14 +18,16 @@
 
 ## UI Components
 
-- **Components:** always use shadcn/ui as the base layer, installed through the CLI into the repo.
-  Extend the generated component rather than wrapping it in another abstraction.
-- **Icons:** always pull from https://icons0.dev/. No mixing icon sets inside one project.
-- **Cards:** use the cult-ui card primitives, https://www.cult-ui.com/docs/components/cutout-card
-  and https://www.cult-ui.com/docs/components/minimal-card.
+- **Components:** use [Kumo UI](https://kumo-ui.com/) (`@cloudflare/kumo`) for buttons, inputs, dialogs,
+  tables, sidebars, and other UI primitives. Install new pieces with `pnpm add @cloudflare/kumo` or
+  the Kumo CLI for blocks. Thin adapters in `src/components/ui/` may wrap Kumo to keep existing import
+  paths stable during migration.
+- **Icons:** use `@phosphor-icons/react` with Kumo components. Lucide remains acceptable in app-specific
+  views until migrated.
+- **Cards:** prefer Kumo `LayerCard`. Cult-ui cutout cards may remain where the design depends on them.
 - **Text animations:** use https://www.cult-ui.com/docs/components/text-animate.
 - **Arrows:** use https://www.cult-ui.com/docs/components/squiggle-arrow.
-- **Loaders:** pick from https://loading-ui.com/ instead of writing a spinner by hand.
+- **Loaders:** use Kumo `Loader` from `@cloudflare/kumo`, or https://loading-ui.com/ for decorative spinners.
 
 ## Forms & Notifications
 

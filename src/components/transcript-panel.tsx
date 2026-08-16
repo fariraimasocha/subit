@@ -5,12 +5,14 @@ import { Input } from '~/components/ui/input.tsx'
 import { editWord, mergeCues, retime, splitCue, type Cue } from '~/lib/cues.ts'
 import { EmptyState } from '~/components/empty-state.tsx'
 import { cn } from '~/lib/utils.ts'
+import { useEditor } from '~/store/editor.ts'
 
 type Props = {
   cues: Cue[]
   currentTime: number
   onChange: (cues: Cue[]) => void
   onSeek: (t: number) => void
+  onSelectCue?: (cue: Cue) => void
 }
 
 /**
@@ -18,8 +20,9 @@ type Props = {
  * array, which is then handed up and persisted in one write. Editing a word's
  * text never touches its timing.
  */
-export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) {
+export function TranscriptPanel({ cues, currentTime, onChange, onSeek, onSelectCue }: Props) {
   const activeIdx = cues.findIndex((c) => currentTime >= c.start && currentTime <= c.end)
+  const selectedCueId = useEditor((s) => s.selectedCueId)
   const listRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -58,39 +61,45 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
   return (
     // relative so a row's offsetTop is measured against this list rather than
     // some ancestor, which is what the scroll maths above assumes.
-    <div ref={listRef} className="relative max-h-[60vh] space-y-0.5 overflow-y-auto pr-1 xl:h-full xl:max-h-none">
+    <div ref={listRef} className="relative h-full max-h-[60vh] space-y-2 overflow-y-auto pr-1 xl:max-h-none">
       {cues.map((cue, i) => (
         <div
           key={cue.id}
           data-cue-index={i}
+          role={onSelectCue ? 'button' : undefined}
+          tabIndex={onSelectCue ? 0 : undefined}
+          onClick={onSelectCue ? () => onSelectCue(cue) : undefined}
+          onKeyDown={
+            onSelectCue
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelectCue(cue)
+                  }
+                }
+              : undefined
+          }
           className={cn(
-            'group rounded-md border border-transparent p-2 transition-colors',
+            'group rounded-lg border border-transparent p-2.5 transition-colors',
             i === activeIdx ? 'bg-surface-3' : 'hover:bg-surface-2',
+            onSelectCue && cue.id === selectedCueId && 'border-brand bg-surface-3 ring-1 ring-brand',
           )}
         >
-          <div className="flex items-center gap-1">
+          <div className="mb-1.5 flex items-center gap-1">
             <button
               type="button"
-              onClick={() => onSeek(cue.start)}
-              className="w-14 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSeek(cue.start)
+              }}
+              className="text-left font-mono text-xs tabular-nums text-muted-foreground hover:text-foreground"
             >
-              {fmt(cue.start)}
+              {fmt(cue.start)} - {fmt(cue.end)}
             </button>
-
-            <div className="flex flex-1 flex-wrap items-center gap-1">
-              {cue.words.map((w, wi) => (
-                <WordInput
-                  key={wi}
-                  value={w.text}
-                  onCommit={(text) => text !== w.text && onChange(editWord(cues, cue.id, wi, text))}
-                  onSplit={
-                    wi < cue.words.length - 1 ? () => onChange(splitCue(cues, cue.id, wi)) : undefined
-                  }
-                />
-              ))}
-            </div>
-
-            <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <div
+              className="ml-auto flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+            >
               <Button
                 size="icon"
                 variant="ghost"
@@ -122,6 +131,18 @@ export function TranscriptPanel({ cues, currentTime, onChange, onSeek }: Props) 
               </Button>
             </div>
           </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-surface-1 px-1.5 py-1">
+              {cue.words.map((w, wi) => (
+                <WordInput
+                  key={wi}
+                  value={w.text}
+                  onCommit={(text) => text !== w.text && onChange(editWord(cues, cue.id, wi, text))}
+                  onSplit={
+                    wi < cue.words.length - 1 ? () => onChange(splitCue(cues, cue.id, wi)) : undefined
+                  }
+                />
+              ))}
+          </div>
         </div>
       ))}
     </div>
@@ -142,7 +163,7 @@ function WordInput({
   useEffect(() => setDraft(value), [value])
 
   return (
-    <span className="inline-flex items-center">
+    <span className="inline-flex items-center" onClick={(e) => e.stopPropagation()}>
       <Input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

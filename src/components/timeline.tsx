@@ -1,8 +1,8 @@
-import { ImagePlus, Minus, Plus, Trash2 } from 'lucide-react'
+import { ImagePlus, Minus, Plus, Trash2, Type } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { Button } from '~/components/ui/button.tsx'
 import { retime, type Cue } from '~/lib/cues.ts'
-import { clampOverlay, MIN_SPAN, type Overlay } from '~/lib/overlays.ts'
+import { clampOverlay, isTextOverlay, MIN_SPAN, type Overlay } from '~/lib/overlays.ts'
 import { cn } from '~/lib/utils.ts'
 import { useEditor } from '~/store/editor.ts'
 
@@ -15,6 +15,7 @@ type Props = {
   onCuesChange: (cues: Cue[]) => void
   onOverlayCommit: (o: Overlay) => void
   onAddImage: (file: File) => void
+  onAddText: () => void
   onRemoveOverlay: (id: string) => void
   adding?: boolean
 }
@@ -46,6 +47,7 @@ export function Timeline({
   onCuesChange,
   onOverlayCommit,
   onAddImage,
+  onAddText,
   onRemoveOverlay,
   adding,
 }: Props) {
@@ -118,6 +120,10 @@ export function Timeline({
 
         <div className="ml-auto" />
 
+        <Button size="sm" variant="outline" className="gap-1.5" disabled={dur === 0} onClick={onAddText}>
+          <Type className="size-4" />
+          Text
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -140,6 +146,25 @@ export function Timeline({
             if (file) onAddImage(file)
           }}
         />
+
+        {selectedOverlayId &&
+          (() => {
+            const selected = overlays.find((o) => o.id === selectedOverlayId)
+            if (!selected || !isTextOverlay(selected)) return null
+            return (
+              <input
+                type="color"
+                aria-label="Text color"
+                value={selected.color}
+                onChange={(e) => {
+                  const next = { ...selected, color: e.target.value.toUpperCase() }
+                  patchOverlay(selected.id, next)
+                  onOverlayCommit(next)
+                }}
+                className="h-8 w-10 cursor-pointer rounded-md border border-white/10 bg-transparent p-1"
+              />
+            )
+          })()}
 
         {selectedOverlayId && (
           <Button
@@ -168,7 +193,7 @@ export function Timeline({
         <div className="shrink-0 border-r border-white/10 bg-muted/30" style={{ width: GUTTER_W }}>
           <div className="border-b border-white/10" style={{ height: RULER_H }} />
           <LaneLabel name="Captions" count={cues.length} height={LANE_H.cues} />
-          <LaneLabel name="Images" count={overlays.length} height={LANE_H.images} />
+          <LaneLabel name="Overlays" count={overlays.length} height={LANE_H.images} />
         </div>
 
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
@@ -203,7 +228,7 @@ export function Timeline({
                   pps={pps}
                   duration={dur}
                   selected={c.id === selectedCueId}
-                  className="bg-foreground/20 hover:bg-foreground/30"
+                  className="bg-brand/30 hover:bg-brand/40"
                   onSelect={() => {
                     selectCue(c.id)
                     if (videoRef.current) videoRef.current.currentTime = c.start
@@ -220,7 +245,7 @@ export function Timeline({
             <Lane height={LANE_H.images}>
               {overlays.length === 0 && (
                 <p className="pointer-events-none sticky left-0 flex h-full items-center px-3 text-xs text-muted-foreground">
-                  No images yet. Add one and drag it where you want it.
+                  Add text or an image, then drag it on the preview.
                 </p>
               )}
               {overlays.map((o) => (
@@ -239,8 +264,14 @@ export function Timeline({
                     onOverlayCommit(next)
                   }}
                 >
-                  <img src={o.url} alt="" className="size-6 shrink-0 rounded-xs object-cover" />
-                  <span className="truncate text-xs">{o.name}</span>
+                  {o.kind === 'text' ? (
+                    <span className="truncate px-1 text-xs">{o.text}</span>
+                  ) : (
+                    <>
+                      <img src={o.url} alt="" className="size-6 shrink-0 rounded-xs object-cover" />
+                      <span className="truncate text-xs">{o.name}</span>
+                    </>
+                  )}
                 </Block>
               ))}
             </Lane>

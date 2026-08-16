@@ -1,11 +1,13 @@
 import { createServerFn } from '@tanstack/react-start'
+import { getRequestHeaders } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import type { Cue } from '~/lib/cues.ts'
-import type { Overlay } from '~/lib/overlays.ts'
+import { isImageOverlay, type Overlay } from '~/lib/overlays.ts'
 import type { Theme } from '~/lib/theme.ts'
 import { createProject, deleteProject, getProject, listProjects } from './d1.server.ts'
 import type { Project } from '~/lib/project.ts'
 import { jobs, runExport, runIngest } from './jobs.server.ts'
+import { agentLog, agentLogAuth, agentLogD8 } from './debug-log.server.ts'
 import {
   buildKey,
   deleteObject,
@@ -19,6 +21,14 @@ import {
 import { d1Configured } from './d1.server.ts'
 import { groqConfigured } from './groq.server.ts'
 import { updateProject } from './d1.server.ts'
+import { auth } from '~/lib/auth.ts'
+
+async function requireUserId(): Promise<string> {
+  const headers = getRequestHeaders()
+  const session = await auth.api.getSession({ headers })
+  if (!session) throw new Error('Unauthorized')
+  return session.user.id
+}
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 /** An overlay is a logo or a sticker, not a source video. */
@@ -173,35 +183,65 @@ export const presign = createServerFn({ method: 'POST' })
 export const createProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ name: z.string().min(1).max(200), srcKey: z.string().min(1) }))
   .handler(async ({ data }) => {
+    const userId = await requireUserId()
     const id = crypto.randomUUID()
-    // Claimed before the insert so a replay cannot come back and delete the
-    // object out from under a project that was created successfully.
     const ours = claimKey(data.srcKey)
     try {
-      await createProject(id, data.name, data.srcKey)
+      await createProject(id, data.name, data.srcKey, userId)
     } catch (e) {
-      // The object is uploaded but no row will ever reference it, so bin it
-      // here rather than exposing a delete-by-key endpoint. Only keys this
-      // process issued are eligible.
-      // ponytail: this does not cover the browser dying between the PUT and
-      // this call. That orphan needs a reaper, which is the queue we said no to.
       if (ours) await deleteObject(data.srcKey).catch(() => {})
       throw e
     }
-    // Detached on purpose. Long-lived Node process only, see runIngest.
     void runIngest(id)
     return { id }
   })
 
-export const listProjectsFn = createServerFn({ method: 'GET' }).handler(async (): Promise<Project[]> => listProjects())
+export const listProjectsFn = createServerFn({ method: 'GET' }).handler(async (): Promise<Project[]> => {
+  const started = Date.now()
+  // #region agent log
+  agentLogAuth({
+    runId: 'freeze-2',
+    hypothesisId: 'N',
+    location: 'api.ts:listProjectsFn',
+    message: 'listProjects start',
+  })
+  // #endregion
+  const userId = await requireUserId()
+  const rows = await listProjects(userId)
+  // #region agent log
+  agentLogAuth({
+    runId: 'freeze-2',
+    hypothesisId: 'N',
+    location: 'api.ts:listProjectsFn',
+    message: 'listProjects end',
+    data: { count: rows.length, ms: Date.now() - started },
+  })
+  // #endregion
+  // #region agent log
+  agentLogD8({
+    location: 'api.ts:listProjectsFn',
+    message: 'projects page data loaded',
+    hypothesisId: 'F',
+    runId: 'post-fix-4',
+    data: { count: rows.length },
+  })
+  // #endregion
+  return rows
+})
 
 export const getProjectFn = createServerFn({ method: 'GET' })
   .validator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data }): Promise<Project | null> => getProject(data.id))
+  .handler(async ({ data }): Promise<Project | null> => {
+    const userId = await requireUserId()
+    return getProject(data.id, userId)
+  })
 
 export const saveCues = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1), cues: z.array(cueSchema) }))
   .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
+    if (!project) throw new Error('Project not found')
     await updateProject(data.id, { cues_json: JSON.stringify(data.cues as Cue[]) })
     return { ok: true }
   })
@@ -211,25 +251,45 @@ export const saveCues = createServerFn({ method: 'POST' })
  * pinned to the shape buildKey('overlay', ext) produces. Without this a caller
  * could name any object in the bucket and have the server burn it into a video.
  */
-const overlaySchema = z.object({
+const overlayBase = {
   id: z.string().min(1),
-  key: z.string().regex(/^overlay\/[0-9a-f-]{36}\.(png|jpe?g|webp)$/),
   name: z.string().max(200),
   start: z.number().nonnegative(),
   end: z.number().positive(),
   xPct: z.number(),
   yPct: z.number(),
   widthPct: z.number(),
-})
+}
+
+const overlaySchema = z.union([
+  z.object({
+    ...overlayBase,
+    kind: z.literal('text'),
+    text: z.string().trim().min(1).max(200),
+    fontFamily: z.string().min(1).max(80),
+    fontFile: z.string().regex(/^[A-Za-z0-9.-]+\.ttf$/),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+    fontSizePct: z.number().min(1).max(20),
+  }),
+  z.object({
+    ...overlayBase,
+    kind: z.literal('image').optional(),
+    key: z.string().regex(/^overlay\/[0-9a-f-]{36}\.(png|jpe?g|webp)$/),
+  }),
+])
 
 export const saveOverlays = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1), overlays: z.array(overlaySchema).max(50) }))
   .handler(async ({ data }) => {
-    const before = await getProject(data.id)
+    const userId = await requireUserId()
+    const before = await getProject(data.id, userId)
+    if (!before) throw new Error('Project not found')
     // url is derived here rather than accepted: a stored URL is what the <img>
     // in the editor loads, and it should never be a string a caller chose.
     const overlays: Overlay[] = await Promise.all(
-      data.overlays.map(async (o) => ({ ...o, url: await publicUrl(o.key) })),
+      data.overlays.map(async (o) =>
+        o.kind === 'text' ? o : { ...o, kind: 'image' as const, url: await publicUrl(o.key) },
+      ),
     )
     await updateProject(data.id, { overlays_json: JSON.stringify(overlays) })
 
@@ -242,8 +302,8 @@ export const saveOverlays = createServerFn({ method: 'POST' })
     // saves, so the exposed cases are a second tab, or deleting an image while
     // an export of it is already downloading. Both fail loudly (a failed export
     // you re-run), neither loses the project.
-    const kept = new Set(overlays.map((o) => o.key))
-    const gone = (before?.overlays ?? []).filter((o) => !kept.has(o.key))
+    const kept = new Set(overlays.filter(isImageOverlay).map((o) => o.key))
+    const gone = (before?.overlays ?? []).filter(isImageOverlay).filter((o) => !kept.has(o.key))
     await Promise.all(gone.map((o) => deleteObject(o.key).catch(() => {})))
     return { overlays }
   })
@@ -253,6 +313,16 @@ export const saveOverlays = createServerFn({ method: 'POST' })
 export const saveTheme = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1), theme: themeSchema }))
   .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
+    if (!project) throw new Error('Project not found')
+    agentLog({
+      location: 'api.saveTheme',
+      message: 'persist theme',
+      data: { themeId: data.theme.id, themeName: data.theme.name },
+      hypothesisId: 'A',
+      runId: 'post-fix-4',
+    })
     await updateProject(data.id, { theme_json: JSON.stringify(data.theme as Theme) })
     return { ok: true }
   })
@@ -260,6 +330,9 @@ export const saveTheme = createServerFn({ method: 'POST' })
 export const renameProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1), name: z.string().trim().min(1).max(200) }))
   .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
+    if (!project) throw new Error('Project not found')
     await updateProject(data.id, { name: data.name })
     return { name: data.name }
   })
@@ -274,10 +347,9 @@ export const retryIngest = createServerFn({ method: 'POST' })
 export const deleteProjectFn = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }) => {
-    // Read the keys before dropping the row, or the objects become unreachable
-    // and sit in the bucket forever. The keys come from the row rather than the
-    // caller, so this cannot be pointed at someone else's object.
-    const project = await getProject(data.id)
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
+    if (!project) throw new Error('Project not found')
     await deleteProject(data.id)
     if (project) {
       const keys = [
@@ -285,7 +357,7 @@ export const deleteProjectFn = createServerFn({ method: 'POST' })
         project.norm_key,
         exportKeyOf(project.export_url),
         keyOf(project.poster_url, 'poster'),
-        ...project.overlays.map((o) => o.key),
+        ...project.overlays.filter(isImageOverlay).map((o) => o.key),
       ]
       // Best effort: the row is already gone, so a failed delete must not turn
       // into an error the user can do anything about. Worst case is an orphan.
@@ -301,24 +373,61 @@ export const deleteProjectFn = createServerFn({ method: 'POST' })
 export const getDownloadUrl = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }) => {
-    const project = await getProject(data.id)
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
     const key = exportKeyOf(project?.export_url ?? null)
     if (!project || !key) throw new Error('This project has not been exported yet')
     const name = project.name.replace(/[^\w. -]+/g, '').trim() || 'subit'
+    agentLog({
+      location: 'api.getDownloadUrl',
+      message: 'download requested',
+      data: { themeId: project.theme?.id, exportKey: key.slice(-12) },
+      hypothesisId: 'C',
+      runId: 'post-fix-7',
+    })
     return { url: await presignDownloadUrl(key, `${name}.mp4`) }
   })
 
 export const startExport = createServerFn({ method: 'POST' })
-  .validator(z.object({ id: z.string().min(1) }))
+  .validator(z.object({ id: z.string().min(1), theme: themeSchema }))
   .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const project = await getProject(data.id, userId)
+    if (!project) throw new Error('Project not found')
+    agentLog({
+      location: 'api.startExport',
+      message: 'start export',
+      data: {
+        themeId: data.theme.id,
+        themeName: data.theme.name,
+        boxColor: data.theme.boxColor,
+      },
+      hypothesisId: 'A',
+      runId: 'post-fix-7',
+    })
     const jobId = crypto.randomUUID()
     // Returns immediately and lets the promise run detached. Fine on a
     // long-lived Node process, broken on serverless: the platform freezes the
     // instance once the response is sent. Do not deploy this to Workers.
-    void runExport(data.id, jobId)
+    void runExport(data.id, jobId, data.theme as Theme)
     return { jobId }
   })
 
 export const getJob = createServerFn({ method: 'GET' })
   .validator(z.object({ jobId: z.string().min(1) }))
   .handler(async ({ data }) => jobs.get(data.jobId) ?? { status: 'error' as const, pct: 0, error: 'Job lost, retry' })
+
+export const debugIngestFn = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      location: z.string(),
+      message: z.string(),
+      hypothesisId: z.string().optional(),
+      runId: z.string().optional(),
+      data: z.record(z.string(), z.unknown()).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    agentLogD8(data)
+    return { ok: true }
+  })

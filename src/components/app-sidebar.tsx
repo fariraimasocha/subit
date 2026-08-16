@@ -1,83 +1,68 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Captions, ChevronRight, FolderOpen, Home, PanelLeftClose, PanelLeftOpen, Upload } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '~/components/ui/button.tsx'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible.tsx'
+import { FolderOpen, House, SidebarSimple, Subtitles, Upload } from '@phosphor-icons/react'
 import {
   Sidebar,
+  SidebarCollapsible,
+  SidebarCollapsibleContent,
+  SidebarCollapsibleTrigger,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
+  SidebarMenuChevron,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  SidebarTrigger,
   useSidebar,
 } from '~/components/ui/sidebar.tsx'
 import { projectsQuery, useConfig } from '~/lib/queries.ts'
 import { cn } from '~/lib/utils.ts'
 
 const items = [
-  { title: 'Home', to: '/dashboard', icon: Home, exact: true },
-  { title: 'Projects', to: '/dashboard/projects', icon: FolderOpen, exact: false },
-  { title: 'New project', to: '/dashboard/new', icon: Upload, exact: false },
+  { title: 'Home', href: '/dashboard', icon: House, exact: true },
+  { title: 'Projects', href: '/dashboard/projects', icon: FolderOpen, exact: false },
+  { title: 'New project', href: '/dashboard/new', icon: Upload, exact: false },
 ] as const
 
-/** Enough to jump back into what you were editing, not a second projects page. */
 const RECENT = 5
 
-/** Injected from package.json by vite.config.ts, so it cannot drift from the release. */
 declare const __APP_VERSION__: string
 
 function SidebarCollapseTrigger({ className }: { className?: string }) {
-  const { state, toggleSidebar } = useSidebar()
-  const expanded = state === 'expanded'
-  const Icon = expanded ? PanelLeftClose : PanelLeftOpen
+  const { state } = useSidebar()
+  const expanded = state === 'expanded' || state === 'peeking'
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      onClick={toggleSidebar}
-      className={cn('size-7 text-muted-foreground hover:text-foreground', className)}
+    <SidebarTrigger
+      className={cn('text-muted-foreground hover:text-foreground', className)}
       aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
     >
-      <Icon className="size-4" />
-    </Button>
+      <SidebarSimple className="size-4" />
+    </SidebarTrigger>
   )
 }
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  // Same query key the projects table uses, so this is the cached list on the
-  // dashboard and one small request on the editor. No poll: creating or deleting
-  // a project already invalidates qk.projects.
   const { ready } = useConfig()
   const { data: projects } = useQuery(projectsQuery(ready))
   const recent = projects?.slice(0, RECENT) ?? []
-  // ponytail: open by default, remembered for the session only. The sidebar's
-  // own collapsed state gets a cookie because it survives a reload; five links
-  // do not need one.
-  const [recentOpen, setRecentOpen] = useState(true)
 
   return (
-    <Sidebar collapsible="icon" className="border-white/10">
-      <SidebarHeader>
+    <Sidebar className="border-white/10">
+      <SidebarHeader className="group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:px-0">
         <Link
           to="/"
-          className="flex items-center gap-2.5 px-2 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-3 no-underline group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:px-0"
         >
           <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
-            <Captions className="size-4" />
+            <Subtitles className="size-4" weight="fill" />
           </span>
-          <span className="truncate font-mono text-base font-bold tracking-tight group-data-[collapsible=icon]:hidden">
+          <span className="truncate font-mono text-base font-bold tracking-tight group-data-[state=collapsed]/sidebar:hidden">
             subit
           </span>
         </Link>
@@ -85,75 +70,60 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const link = (
+          <SidebarMenu>
+            {items.map((item) => {
+              const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+
+              if (item.href !== '/dashboard/projects' || recent.length === 0) {
+                return (
                   <SidebarMenuButton
-                    asChild
-                    isActive={item.exact ? pathname === item.to : pathname.startsWith(item.to)}
-                    // Collapsed to a 3rem rail there is no label, so the tooltip is
-                    // the only thing naming the destination.
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    active={active}
                     tooltip={item.title}
                   >
-                    <Link to={item.to}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
+                    {item.title}
                   </SidebarMenuButton>
                 )
+              }
 
-                // Recent hangs off Projects rather than getting its own group:
-                // it is the same list, just the top of it.
-                if (item.to !== '/dashboard/projects' || recent.length === 0) {
-                  return <SidebarMenuItem key={item.to}>{link}</SidebarMenuItem>
-                }
-
-                return (
-                  // asChild so the Root does not put a <div> between the <ul> and
-                  // its <li>. It also lands data-state on the item, which is what
-                  // the chevron rotates off.
-                  <Collapsible key={item.to} asChild open={recentOpen} onOpenChange={setRecentOpen}>
-                    <SidebarMenuItem>
-                      {link}
-                      {/* Its own control, because the row itself is a link to the
-                          full list and must stay one. */}
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuAction aria-label={recentOpen ? 'Hide recent' : 'Show recent'}>
-                          <ChevronRight className="transition-transform group-data-[state=open]/menu-item:rotate-90" />
-                        </SidebarMenuAction>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        {/* SidebarMenuSub hides itself on the collapsed rail,
-                            where there is no room for names. */}
-                        <SidebarMenuSub>
-                          {recent.map((p) => (
-                            <SidebarMenuSubItem key={p.id}>
-                              <SidebarMenuSubButton
-                                asChild
-                                size="sm"
-                                isActive={pathname === `/editor/${p.id}`}
-                              >
-                                <Link to="/editor/$id" params={{ id: p.id }} title={p.name}>
-                                  <span>{p.name}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarCollapsible defaultOpen>
+                    <SidebarCollapsibleTrigger
+                      render={
+                        <SidebarMenuButton href={item.href} icon={item.icon} active={active} tooltip={item.title}>
+                          {item.title}
+                          <SidebarMenuChevron />
+                        </SidebarMenuButton>
+                      }
+                    />
+                    <SidebarCollapsibleContent>
+                      <SidebarMenuSub>
+                        {recent.map((p) => (
+                          <SidebarMenuSubButton
+                            key={p.id}
+                            href={`/editor/${p.id}`}
+                            active={pathname === `/editor/${p.id}`}
+                            title={p.name}
+                          >
+                            {p.name}
+                          </SidebarMenuSubButton>
+                        ))}
+                      </SidebarMenuSub>
+                    </SidebarCollapsibleContent>
+                  </SidebarCollapsible>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto border-t border-white/10 p-0">
-        <div className="flex items-center justify-between px-3 py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+      <SidebarFooter className="mt-auto border-t border-white/10">
+        <div className="flex w-full items-center justify-between group-data-[state=collapsed]/sidebar:justify-center">
+          <span className="text-xs text-muted-foreground group-data-[state=collapsed]/sidebar:hidden">
             v{__APP_VERSION__}
           </span>
           <SidebarCollapseTrigger />

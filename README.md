@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS projects (
   poster_url TEXT,     -- one frame from the clip, for the project card
   export_url TEXT, error TEXT,
   stage TEXT,          -- normalising|uploading|transcribing|grouping
+  user_id TEXT,        -- Better Auth user.id, scopes the dashboard list
   created_at INTEGER NOT NULL
 );
 ```
@@ -157,6 +158,8 @@ Two columns were added later. Run them once:
 ```sql
 ALTER TABLE projects ADD COLUMN overlays_json TEXT;
 ALTER TABLE projects ADD COLUMN poster_url TEXT;
+ALTER TABLE projects ADD COLUMN user_id TEXT;
+CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects (user_id);
 ```
 
 Rows without `overlays_json` read as "no images", so nothing breaks until you

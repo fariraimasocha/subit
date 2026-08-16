@@ -3,21 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.19.0",
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "start": "node --experimental-strip-types serve.ts",
+    "deploy": "wrangler deploy --containers-rollout=immediate",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
+    "@cloudflare/kumo": "^2.10.0",
     "@hookform/resolvers": "^5.5.7",
+    "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-use-controllable-state": "^1.2.6",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-start": "^1.168.33",
     "@tanstack/react-table": "^8.21.3",
     "aws4fetch": "^1.0.20",
+    "better-auth": "^1.6.29",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.28.0",
@@ -38,9 +44,17 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
+    "puppeteer": "^25.7.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.0",
     "vite": "^7.2.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "wrangler": "^4.119.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
   }
 }

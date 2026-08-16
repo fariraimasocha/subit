@@ -2,48 +2,51 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   createColumnHelper,
-  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
-  type SortingState,
 } from '@tanstack/react-table'
-import { Clapperboard, Search, Trash2, Upload } from 'lucide-react'
-import { useState } from 'react'
+import { Clapperboard, Trash2, Upload } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
+import { FloatingLabelInput } from '~/components/interior/floating-label.tsx'
+import { Pagination } from '~/components/interior/pagination.tsx'
+import { SkeletonSwap } from '~/components/interior/skeleton-swap.tsx'
+import { SortableTable, type SortState } from '~/components/interior/sortable-table.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { Card, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
-import { Skeleton } from '~/components/ui/skeleton.tsx'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog.tsx'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table.tsx'
 import type { Project } from '~/lib/project.ts'
 import { projectsQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
 import { EmptyState } from '~/components/empty-state.tsx'
-import { deleteProjectFn } from '~/server/api.ts'
+import { debugIngestFn, deleteProjectFn } from '~/server/api.ts'
 
 export const Route = createFileRoute('/dashboard/projects')({ component: Projects })
 
 const col = createColumnHelper<Project>()
 
+function formatLength(d: number | null) {
+  if (!d) return null
+  const total = Math.round(d)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
 function Projects() {
   const qc = useQueryClient()
   const { config, ready, known } = useConfig()
   const { data, isPending, error } = useQuery(projectsQuery(ready))
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
   const [search, setSearch] = useState('')
-  // Deleting drops the row and the video with it, so it asks first.
+  const [sort, setSort] = useState<SortState | null>({ columnId: 'created_at', direction: 'desc' })
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null)
 
   const remove = useMutation({
@@ -56,67 +59,111 @@ function Projects() {
     onSettled: () => setPendingDelete(null),
   })
 
-  const columns = [
-    col.accessor('name', {
-      header: 'Name',
-      cell: (c) => (
-        <Link to="/editor/$id" params={{ id: c.row.original.id }} className="font-medium hover:underline">
-          {c.getValue()}
-        </Link>
-      ),
-    }),
-    col.accessor('status', { header: 'Status', cell: (c) => <StatusBadge status={c.getValue()} /> }),
-    col.accessor('duration', {
-      header: 'Length',
-      cell: (c) => {
-        const d = c.getValue()
-        if (!d) return <span className="text-muted-foreground">-</span>
-        // Round first, then split, or 179.6s formats as 2:60.
-        const total = Math.round(d)
-        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-      },
-    }),
-    col.accessor((r) => r.cues.length, {
-      id: 'cues',
-      header: 'Cues',
-      cell: (c) => c.getValue() || <span className="text-muted-foreground">-</span>,
-    }),
-    col.accessor('created_at', {
-      header: 'Created',
-      cell: (c) => new Date(c.getValue()).toLocaleDateString(),
-    }),
-    col.display({
-      id: 'actions',
-      header: '',
-      cell: (c) => (
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={`Delete ${c.row.original.name}`}
-          onClick={() => setPendingDelete(c.row.original)}
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      ),
-    }),
-  ]
+  const filterColumns = useMemo(
+    () => [
+      col.accessor('name', {
+        header: 'Name',
+        cell: (c) => c.getValue(),
+      }),
+    ],
+    [],
+  )
 
   const table = useReactTable({
     data: data ?? [],
-    columns,
-    state: { sorting, globalFilter: search },
-    onSortingChange: setSorting,
+    columns: filterColumns,
+    state: { globalFilter: search },
     onGlobalFilterChange: setSearch,
-    // Name is the only column anyone searches by; matching against status or a
-    // date string would make the filter feel haunted.
     globalFilterFn: (row, _id, value: string) =>
       row.original.name.toLowerCase().includes(value.toLowerCase()),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 10 } },
   })
+
+  const pageRows = table.getRowModel().rows.map((r) => r.original)
+  const pageCount = table.getPageCount() || 1
+  const pageIndex = table.getState().pagination.pageIndex
+
+  const interiorColumns = useMemo(
+    () => [
+      {
+        id: 'name',
+        header: 'Name',
+        value: (p: Project) => p.name,
+        cell: (p: Project) => (
+          <Link to="/editor/$id" params={{ id: p.id }} className="font-medium text-foreground hover:underline">
+            {p.name}
+          </Link>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        width: '140px',
+        value: (p: Project) => p.status,
+        cell: (p: Project) => <StatusBadge status={p.status} />,
+      },
+      {
+        id: 'duration',
+        header: 'Length',
+        width: '88px',
+        align: 'end' as const,
+        numeric: true,
+        value: (p: Project) => p.duration,
+        cell: (p: Project) => formatLength(p.duration) ?? <span className="text-muted-foreground">-</span>,
+      },
+      {
+        id: 'cues',
+        header: 'Cues',
+        width: '72px',
+        align: 'end' as const,
+        numeric: true,
+        value: (p: Project) => p.cues.length,
+        cell: (p: Project) => p.cues.length || <span className="text-muted-foreground">-</span>,
+      },
+      {
+        id: 'created_at',
+        header: 'Created',
+        width: '120px',
+        value: (p: Project) => p.created_at,
+        cell: (p: Project) => new Date(p.created_at).toLocaleDateString(),
+      },
+      {
+        id: 'actions',
+        header: '',
+        width: '48px',
+        align: 'end' as const,
+        sortable: false,
+        cell: (p: Project) => (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Delete ${p.name}`}
+            onClick={() => {
+              setPendingDelete(p)
+              // #region agent log
+              fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix-4',hypothesisId:'F',location:'dashboard.projects.tsx:trash',message:'Trash clicked, opening delete modal',data:{hasName:!!p.name},timestamp:Date.now()})}).catch(()=>{});
+              void debugIngestFn({
+                data: {
+                  location: 'dashboard.projects.tsx:trash',
+                  message: 'Trash clicked, opening delete modal',
+                  hypothesisId: 'F',
+                  runId: 'post-fix-4',
+                  data: { hasName: !!p.name },
+                },
+              }).catch(() => {})
+              // #endregion
+            }}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ),
+      },
+    ],
+    [],
+  )
 
   if (error) {
     return (
@@ -129,21 +176,49 @@ function Projects() {
     )
   }
 
+  useEffect(() => {
+    if (!pendingDelete) return
+    const id = window.requestAnimationFrame(() => {
+      const dialog = document.querySelector('[role="dialog"]')
+      const footer = dialog?.querySelector('[data-debug="delete-footer"]')
+      const buttons = dialog
+        ? Array.from(dialog.querySelectorAll('button')).map((b) => ({
+            text: (b.textContent ?? '').trim(),
+            aria: b.getAttribute('aria-label'),
+            w: Math.round(b.getBoundingClientRect().width),
+            h: Math.round(b.getBoundingClientRect().height),
+          }))
+        : []
+      const payload = {
+        buttonCount: buttons.length,
+        buttons,
+        hasKeepIt: buttons.some((b) => b.text === 'Keep it'),
+        emptyLabeled: buttons.filter((b) => !b.text && b.aria !== 'Close').length,
+        footerHtml: footer?.innerHTML?.slice(0, 800) ?? null,
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix-2',hypothesisId:'F',location:'dashboard.projects.tsx:footer-dom',message:'Delete modal button DOM',data:payload,timestamp:Date.now()})}).catch(()=>{});
+      void debugIngestFn({
+        data: {
+          location: 'dashboard.projects.tsx:footer-dom',
+          message: 'Delete modal button DOM',
+          hypothesisId: 'F',
+          runId: 'post-fix-2',
+          data: payload,
+        },
+      }).catch(() => {})
+      // #endregion
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [pendingDelete])
+
+  const empty = !isPending && table.getFilteredRowModel().rows.length === 0
+
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-        <div className="flex items-center gap-2.5">
-          <label className="flex h-9 w-56 items-center gap-2 rounded-lg border border-border/40 bg-surface-2 px-3">
-            <Search className="size-4 shrink-0 text-text-muted" aria-hidden />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search projects..."
-              className="w-full bg-transparent text-sm outline-none placeholder:text-text-muted"
-            />
-          </label>
+      <header className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
           <Button asChild className="shadow-lg shadow-brand/25">
             <Link to="/dashboard/new">
               <Upload className="size-4" />
@@ -151,77 +226,64 @@ function Projects() {
             </Link>
           </Button>
         </div>
+        <FloatingLabelInput
+          className="max-w-sm"
+          label="Search projects"
+          type="search"
+          value={search}
+          onChange={setSearch}
+        />
       </header>
 
       {known && !ready ? (
         <SetupNotice config={config} />
       ) : isPending ? (
-        <Skeleton className="h-64 rounded-xl" />
-      ) : table.getRowModel().rows.length === 0 ? (
-        // Headers, sort handles and pagination for nothing at all read as a
-        // broken page, so the whole table goes and the space explains itself.
+        <SkeletonSwap ready={false} reserve={280} label="Projects" className="rounded-xl border border-white/10 p-4">
+          {null}
+        </SkeletonSwap>
+      ) : empty ? (
         <EmptyState
           icon={Clapperboard}
-          title="No projects yet"
-          body="Once you upload a video it lands here with its status, length and cue count, ready to open in the editor."
+          title={search ? 'No matching projects' : 'No projects yet'}
+          body={
+            search
+              ? 'Nothing in the list matches that name. Clear the search to see every project.'
+              : 'Once you upload a video it lands here with its status, length and cue count, ready to open in the editor.'
+          }
           action={
-            <Button asChild size="lg">
-              <Link to="/dashboard/new">
-                <Upload className="size-4" />
-                Upload a video
-              </Link>
-            </Button>
+            search ? undefined : (
+              <Button asChild size="lg">
+                <Link to="/dashboard/new">
+                  <Upload className="size-4" />
+                  Upload a video
+                </Link>
+              </Button>
+            )
           }
         />
       ) : (
         <>
-          <div className="rounded-xl border border-white/10">
-            <Table className="[&_tr]:border-white/10">
-              <TableHeader>
-                {table.getHeaderGroups().map((hg) => (
-                  <TableRow key={hg.id}>
-                    {hg.headers.map((h) => (
-                      <TableHead
-                        key={h.id}
-                        onClick={h.column.getToggleSortingHandler()}
-                        className={h.column.getCanSort() ? 'cursor-pointer select-none' : undefined}
-                      >
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        {{ asc: ' ↑', desc: ' ↓' }[h.column.getIsSorted() as string] ?? ''}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <SortableTable
+            label="Projects"
+            rows={pageRows}
+            getRowId={(p) => p.id}
+            getRowLabel={(p) => p.name}
+            columns={interiorColumns}
+            sort={sort}
+            onSortChange={setSort}
+            className="border-white/10 bg-surface-2 shadow-none"
+          />
 
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+              Page {pageIndex + 1} of {pageCount}
             </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Previous
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-                Next
-              </Button>
-            </div>
+            <Pagination
+              count={pageCount}
+              page={pageIndex + 1}
+              label="Projects pages"
+              onPageChange={(next) => table.setPageIndex(next - 1)}
+            />
           </div>
         </>
       )}
@@ -234,15 +296,10 @@ function Projects() {
               {pendingDelete?.name} and its transcript go for good. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button
-                variant="outline"
-                className="border-white/10 bg-surface-3 shadow-none hover:bg-surface-2 dark:border-white/10 dark:bg-surface-3 dark:hover:bg-surface-2"
-              >
-                Keep it
-              </Button>
-            </DialogClose>
+          <DialogFooter data-debug="delete-footer">
+            <Button type="button" variant="secondary" onClick={() => setPendingDelete(null)}>
+              Keep it
+            </Button>
             <Button
               variant="destructive"
               className="border border-danger/30 bg-danger text-danger-foreground hover:bg-danger/90 dark:bg-danger"

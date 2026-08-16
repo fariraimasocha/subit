@@ -1,3 +1,5 @@
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -236,6 +238,46 @@
   * {
     @apply border-border;
   }
+  html.dark,
+  :root.dark,
+  :root[data-mode='dark'] {
+    color-scheme: dark;
+    /*
+     * Kumo tokens default to light-dark() and a :root light branch. Point the
+     * ones components actually paint with at Subit's foundation so tables,
+     * chrome, and controls stay graphite + orange instead of Cloudflare grey.
+     */
+    --text-color-kumo-default: var(--text-primary);
+    --text-color-kumo-inverse: var(--brand-foreground);
+    --text-color-kumo-strong: var(--text-primary);
+    --text-color-kumo-subtle: var(--text-secondary);
+    --text-color-kumo-inactive: var(--text-muted);
+    --text-color-kumo-placeholder: var(--text-muted);
+    --text-color-kumo-brand: var(--brand);
+    --text-color-kumo-link: var(--brand);
+    --text-color-kumo-danger: var(--danger);
+    --text-color-kumo-warning: var(--warn);
+    --text-color-kumo-success: var(--ok);
+    --color-kumo-canvas: var(--bg);
+    --color-kumo-base: var(--surface-2);
+    --color-kumo-elevated: var(--surface-3);
+    --color-kumo-recessed: var(--surface-1);
+    --color-kumo-tint: var(--surface-3);
+    --color-kumo-contrast: var(--text-primary);
+    --color-kumo-overlay: var(--surface-2);
+    --color-kumo-control: var(--surface-2);
+    --color-kumo-interact: var(--surface-3);
+    --color-kumo-fill: color-mix(in oklch, var(--border-1), transparent 55%);
+    --color-kumo-fill-hover: var(--surface-3);
+    --color-kumo-brand: var(--brand);
+    --color-kumo-brand-hover: color-mix(in oklch, var(--brand), black 10%);
+    --color-kumo-line: color-mix(in oklch, var(--sidebar-foreground) 10%, transparent);
+    --color-kumo-hairline: color-mix(in oklch, var(--sidebar-foreground) 8%, transparent);
+    --color-kumo-focus: var(--brand);
+    --color-kumo-danger: var(--danger);
+    --color-kumo-warning: var(--warn);
+    --color-kumo-success: var(--ok);
+  }
   body {
     @apply bg-background text-foreground;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -252,6 +294,86 @@
     outline: 2px solid var(--brand);
     outline-offset: 2px;
   }
+}
+
+@layer components {
+  /*
+   * Kumo primary maps to its own blue emphasis gradient, which beats Tailwind
+   * bg-brand. Primary CTAs use this class on the secondary Kumo variant instead.
+   */
+  .subit-btn-brand {
+    background-color: var(--brand) !important;
+    color: #fff !important;
+    --tw-ring-color: color-mix(in oklch, var(--brand), transparent 55%);
+  }
+
+  .subit-btn-brand:hover:not(:disabled) {
+    background-color: color-mix(in oklch, var(--brand), black 10%) !important;
+  }
+
+  .subit-btn-brand > .absolute {
+    display: none !important;
+  }
+
+  .subit-btn-brand svg {
+    color: inherit !important;
+    opacity: 1 !important;
+    stroke: currentColor;
+  }
+
+  /*
+   * Kumo Sidebar defaults to light surfaces (--color-kumo-base). Subit keeps
+   * the darkest chrome plane on the rail, same as before the migration.
+   */
+  .subit-sidebar-provider {
+    --sidebar-bg: var(--sidebar);
+    --sidebar-active-bg: var(--sidebar-accent);
+  }
+
+  .subit-sidebar-provider [data-sidebar='sidebar'],
+  .subit-sidebar-provider [data-sidebar='content-container'] {
+    color: var(--sidebar-foreground);
+    border-color: color-mix(in oklch, var(--sidebar-foreground) 10%, transparent);
+  }
+
+  .subit-sidebar-provider [data-kumo-part='menu-button'],
+  .subit-sidebar-provider [data-kumo-part='menu-button-link'],
+  .subit-sidebar-provider [data-sidebar='menu-button'] {
+    color: var(--sidebar-foreground);
+  }
+
+  .subit-sidebar-provider [data-kumo-part='menu-button']:focus-visible,
+  .subit-sidebar-provider [data-kumo-part='menu-button-link']:focus-visible {
+    color: var(--sidebar-accent-foreground);
+  }
+
+  .subit-sidebar-provider [data-sidebar='sidebar'][data-state='collapsed'] [data-sidebar='header'] {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .subit-sidebar-provider [data-sidebar='sidebar'][data-state='collapsed'] [data-sidebar='header'] a {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .subit-sidebar-provider [data-sidebar='sidebar'][data-state='collapsed'] [data-sidebar='footer'] .text-muted-foreground {
+    display: none;
+  }
+}
+
+/*
+ * Unlayered so it beats Kumo's h-full utility. Percentage height does not
+ * resolve against min-height, which is why the rail was content-sized.
+ */
+.subit-sidebar-provider [data-sidebar='sidebar'] {
+  align-self: stretch;
+  height: auto;
+  min-height: 100%;
+}
+
+.subit-sidebar-provider [data-sidebar='content-container'] {
+  min-height: 100%;
 }
 
 /*

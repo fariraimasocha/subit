@@ -26,6 +26,52 @@ export type Theme = {
   highlightMode: 'color' | 'none'
 }
 
+/** Every visual field both renderers read, so any style tweak invalidates the cache. */
+export function themePaintKey(t: Theme) {
+  return [
+    t.id,
+    t.fontFamily,
+    t.fontFile,
+    t.weight,
+    t.fontSizePct,
+    t.outlinePct,
+    t.shadowPct,
+    t.primary,
+    t.highlight,
+    t.outline,
+    t.boxColor,
+    t.uppercase,
+    t.highlightMode,
+    t.letterSpacingEm,
+  ].join('|')
+}
+
+/** Same leading the overlay uses. A Theme cannot store this: it is not a % of height. */
+export const CAPTION_LINE_HEIGHT = 1.15
+
+/** CSS caption box padding in px. Both dimensions derive from font size. */
+export function boxPaddingPx(fontPx: number) {
+  return { block: fontPx * 0.08, inline: fontPx * 0.2 }
+}
+
+/**
+ * BorderStyle 3 has one Outline for every side, which made Marker’s yellow box
+ * fatter than the CSS padding (0.2em all around vs 0.08em / 0.2em). libass
+ * honours \xbord / \ybord, so the burn can keep the same inset as the preview.
+ */
+export function assBoxBorderPx(fontPx: number) {
+  const { block, inline } = boxPaddingPx(fontPx)
+  return {
+    x: Math.max(Math.round(inline * 100) / 100, 2),
+    y: Math.max(Math.round(block * 100) / 100, 2),
+  }
+}
+
+/** Style Outline fallback. Prefer assBoxBorderPx + \xbord/\ybord on events. */
+export function assBoxOutlinePx(fontPx: number) {
+  return assBoxBorderPx(fontPx).x
+}
+
 /** The only place a percentage becomes a number. Both renderers go through here. */
 export function metrics(t: Theme, videoHeight: number) {
   return {

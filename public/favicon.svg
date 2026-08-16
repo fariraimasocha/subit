@@ -1,6 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- The hero mark: lucide's Captions glyph on the app's own near-black tile,
-       so the tab reads the same in a light or a dark browser. -->
   <rect width="32" height="32" rx="7" fill="#0A0A0A" />
   <g
     transform="translate(4 4)"

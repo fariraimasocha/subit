@@ -1,13 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, Download, Loader2, RotateCw } from 'lucide-react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { ArrowLeft, Download } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
+import { z } from 'zod'
+import { EditorInspector } from '~/components/editor-inspector.tsx'
 import { IngestProgress } from '~/components/ingest-progress.tsx'
+import { ProgressBar } from '~/components/interior/progress-bar.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
 import { StylePanel } from '~/components/style-panel.tsx'
 import { TranscriptPanel } from '~/components/transcript-panel.tsx'
 import { Button } from '~/components/ui/button.tsx'
+import { Input } from '~/components/ui/input.tsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { Skeleton } from '~/components/ui/skeleton.tsx'
 import { Timeline } from '~/components/timeline.tsx'
@@ -16,11 +22,12 @@ import type { Cue } from '~/lib/cues.ts'
 import { clampOverlay, type Overlay } from '~/lib/overlays.ts'
 import { projectQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
-import { DEFAULT_THEME, type Theme } from '~/lib/theme.ts'
+import { DEFAULT_THEME, themePaintKey, type Theme } from '~/lib/theme.ts'
 import {
   getDownloadUrl,
   getJob,
   presign,
+  renameProjectFn,
   retryIngest,
   saveCues,
   saveOverlays,
@@ -36,10 +43,13 @@ function Editor() {
   const qc = useQueryClient()
   const { config, ready, known } = useConfig()
   const { data: project, isPending, error } = useQuery(projectQuery(id, ready))
-  const { theme, setTheme, patchTheme, overlays, setOverlays, addOverlay, removeOverlay } = useEditor()
+  const { theme, setTheme, patchTheme, overlays, setOverlays, addOverlay, removeOverlay, selectCue } = useEditor()
   const [currentTime, setCurrentTime] = useState(0)
   const [jobId, setJobId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  /** Theme snapshot from the last successful export in this session. */
+  const exportedThemeKey = useRef<string | null>(null)
+  const [exportReady, setExportReady] = useState(false)
 
   /**
    * Hydrate the store from the persisted snapshot ONCE per project. project.theme
@@ -56,7 +66,28 @@ function Editor() {
     setOverlays(project.overlays)
   }, [project, setTheme, setOverlays])
 
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7504/ingest/c7aaf77f-b085-4d39-8f3f-23b6f4595e57', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd106a0' },
+      body: JSON.stringify({
+        sessionId: 'd106a0',
+        location: 'editor.$id.tsx:mount',
+        message: 'editor loaded',
+        data: { projectId: id, runId: 'post-fix-7' },
+        timestamp: Date.now(),
+        hypothesisId: 'I',
+      }),
+    }).catch(() => {})
+    // #endregion
+  }, [id])
+
   /**
+   * exportedThemeKey is only set after a successful export in this session. Never
+   * infer it from project.theme: saving Kendrick to the DB must not mark an old
+   * MP4 as fresh.
+   *
    * Every write to this project shares one scope, which is what makes TanStack
    * run them one at a time instead of in parallel. The overlapping sequences are
    * real, not theoretical: drop an image on the timeline and drag another while
@@ -115,6 +146,7 @@ function Editor() {
         clampOverlay(
           {
             id: crypto.randomUUID(),
+            kind: 'image',
             key,
             url: getUrl ?? '',
             name: file.name,
@@ -133,14 +165,44 @@ function Editor() {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.project(id) }),
   })
 
+  const addText = () => {
+    const at = videoRef.current?.currentTime ?? 0
+    const t = useEditor.getState().theme
+    addOverlay(
+      clampOverlay(
+        {
+          id: crypto.randomUUID(),
+          kind: 'text',
+          text: 'Text',
+          name: 'Text',
+          fontFamily: t.fontFamily,
+          fontFile: t.fontFile,
+          color: '#FFFFFF',
+          fontSizePct: 6,
+          start: at,
+          end: at + 3,
+          xPct: 50,
+          yPct: 28,
+          widthPct: 70,
+        },
+        project?.duration ?? 0,
+      ),
+    )
+    commitOverlays()
+  }
+
   const exportMutation = useMutation({
     // In the scope, so every queued save from the seconds before this click has
     // landed by the time the server reads the row.
     scope,
     mutationFn: async () => {
-      await saveTheme({ data: { id, theme } })
+      const storeTheme = useEditor.getState().theme
+      // #region agent log
+      fetch('http://127.0.0.1:7504/ingest/c7aaf77f-b085-4d39-8f3f-23b6f4595e57',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d106a0'},body:JSON.stringify({sessionId:'d106a0',location:'editor.$id.tsx:exportMutation',message:'export save theme',data:{savedId:storeTheme.id,boxColor:storeTheme.boxColor,runId:'post-fix-7'},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      await saveTheme({ data: { id, theme: storeTheme } })
       await saveOverlays({ data: { id, overlays: useEditor.getState().overlays } })
-      return startExport({ data: { id } })
+      return startExport({ data: { id, theme: storeTheme } })
     },
     onError: (e) => toast.error((e as Error).message),
     onSuccess: ({ jobId }) => setJobId(jobId),
@@ -180,7 +242,27 @@ function Editor() {
 
   useEffect(() => {
     if (job.data?.status === 'done') {
-      toast.success('Export ready')
+      toast.success('Export ready. Download your new MP4 below.')
+      exportedThemeKey.current = themePaintKey(useEditor.getState().theme)
+      setExportReady(true)
+      // #region agent log
+      fetch('http://127.0.0.1:7504/ingest/c7aaf77f-b085-4d39-8f3f-23b6f4595e57', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd106a0' },
+        body: JSON.stringify({
+          sessionId: 'd106a0',
+          location: 'editor.$id.tsx:exportDone',
+          message: 'export job done',
+          data: {
+            themeId: useEditor.getState().theme.id,
+            boxColor: useEditor.getState().theme.boxColor,
+            runId: 'post-fix-7',
+          },
+          timestamp: Date.now(),
+          hypothesisId: 'A',
+        }),
+      }).catch(() => {})
+      // #endregion
       qc.invalidateQueries({ queryKey: qk.project(id) })
       setJobId(null)
     }
@@ -232,18 +314,47 @@ function Editor() {
   // implies work is still happening.
   const exportStalled = project.status === 'exporting' && !exporting && !jobId
 
+  const styleProps = {
+    theme,
+    videoHeight: project.height ?? 1080,
+    onChange: (patch: Partial<Theme>) => {
+      patchTheme(patch)
+      exportedThemeKey.current = null
+      setExportReady(false)
+      const storeTheme = useEditor.getState().theme
+      const merged = { ...storeTheme, ...patch }
+      persistTheme.mutate(merged)
+    },
+    onPreset: (t: Theme) => {
+      const next = { ...t }
+      setTheme(next)
+      exportedThemeKey.current = null
+      setExportReady(false)
+      const cue =
+        project.cues.find((c) => c.id === useEditor.getState().selectedCueId) ?? project.cues[0]
+      if (cue) {
+        selectCue(cue.id)
+        if (videoRef.current) {
+          videoRef.current.pause()
+          videoRef.current.currentTime = cue.start
+        }
+      }
+      persistTheme.mutate(next)
+    },
+  }
+
   return (
     <Shell>
       {/* Editor chrome, not page content: the actions stay reachable while the
           preset list and the transcript scroll underneath. */}
-      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-white/10 bg-sidebar px-5">
+      <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 border-b border-white/10 bg-sidebar px-4">
         <Button asChild size="icon" variant="ghost" aria-label="Back to projects">
           <Link to="/dashboard/projects">
             <ArrowLeft className="size-4" />
           </Link>
         </Button>
 
-        <h1 className="truncate text-sm font-medium">{project.name}</h1>
+        <ProjectTitle id={project.id} name={project.name} />
         <StatusBadge status={project.status} />
         {project.width && (
           <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -252,8 +363,13 @@ function Editor() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {project.export_url && (
-            <Button size="sm" variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
+          {project.export_url && exportReady && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={download.isPending}
+              onClick={() => download.mutate()}
+            >
               <Download className="size-4" />
               {download.isPending ? 'Preparing' : 'Download'}
             </Button>
@@ -265,142 +381,199 @@ function Editor() {
             }
             onClick={() => exportMutation.mutate()}
           >
-            {exporting ? <Loader2 className="size-4 animate-spin" /> : null}
-            {exporting ? `Exporting ${job.data?.pct ?? 0}%` : 'Export MP4'}
+            Export MP4
           </Button>
         </div>
       </header>
 
       {exporting && (
-        <div className="h-1 w-full shrink-0 overflow-hidden bg-muted">
-          <div className="h-full bg-foreground transition-[width]" style={{ width: `${job.data?.pct ?? 0}%` }} />
+        <div className="shrink-0 border-b border-white/10 bg-surface-2 px-5 py-3">
+          <ProgressBar
+            value={job.data?.pct ?? 0}
+            label={
+              (job.data?.pct ?? 0) < 100 ? 'Exporting MP4' : 'Finishing the file'
+            }
+            pendingLabel="Starting"
+            completeLabel="Export complete"
+          />
         </div>
       )}
 
-      {/* At xl the editor stops being a scrolling page: three columns, each
-          scrolling internally, so the preview never leaves the screen while it
-          plays. Narrower than that it stays a normal stacked page. */}
-      <div className="flex-1 p-4 md:p-6 xl:min-h-0 xl:overflow-hidden xl:p-0">
-      {exportStalled && (
-        <Card className="mb-6 overflow-hidden border-l-4 border-l-brand">
-          <CardHeader>
-            <CardTitle className="text-base">That export did not finish</CardTitle>
-            <CardDescription>
-              The render job is gone, usually because the server restarted while it was working.
-              Nothing is lost, press Export MP4 to run it again.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row xl:overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-video-surface">
+          {exportStalled && (
+            <Card className="mx-4 mt-4 gap-0 overflow-hidden rounded-xl border-white/10 bg-surface-2 py-5 shadow-none">
+              <CardHeader className="px-5">
+                <CardTitle className="text-[15px] font-semibold tracking-tight">That export did not finish</CardTitle>
+                <CardDescription>
+                  The render job is gone, usually because the server restarted while it was working.
+                  Nothing is lost. Press Export MP4 to run it again.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
 
-      {project.status === 'error' && (
-        <Card className="mb-6 overflow-hidden border-l-4 border-l-destructive">
-          <CardHeader>
-            <CardTitle className="text-base">Processing failed</CardTitle>
-            <CardDescription className="font-mono text-xs break-all">{project.error}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <IngestProgress stage={project.stage} failed />
-            <Button variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
-              <RotateCw className="size-4" />
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          {project.status === 'error' && (
+            <IngestProgress
+              className="mx-4 mt-4"
+              stage={project.stage}
+              failed
+              error={project.error}
+              retrying={retry.isPending}
+              onRetry={() => retry.mutate()}
+            />
+          )}
 
-      {notReady && (
-        <Card className="mb-6 overflow-hidden border-l-4 border-l-brand">
-          <CardHeader>
-            <CardTitle className="text-base">Subit is working on your video</CardTitle>
-            <CardDescription>This page updates itself, no need to reload.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <IngestProgress stage={project.stage} />
-          </CardContent>
-        </Card>
-      )}
+          {notReady && <IngestProgress className="mx-4 mt-4" stage={project.stage} />}
 
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start xl:h-full xl:min-h-0 xl:grid-cols-[360px_minmax(0,1fr)_320px] xl:grid-rows-[minmax(0,1fr)] xl:gap-0 xl:items-stretch">
-        {/* Fixed-height so the panel's own footer pins the controls rather than
-            the page scrolling them away. */}
-        {/* max-h, not h: forcing full height leaves dead space between the last
-            toggle and the pinned footer whenever the presets do not fill the
-            column. Capping instead lets the panel shrink to its content and
-            only pin once the list actually overflows. */}
-        <Card className="overflow-hidden p-0 lg:sticky lg:top-20 lg:row-span-2 lg:max-h-[calc(100dvh_-_6.5rem)] xl:static xl:col-start-3 xl:row-start-1 xl:row-span-1 xl:max-h-full xl:min-h-0 xl:self-auto xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l-white/10 xl:bg-sidebar">
-          <StylePanel
-            theme={theme}
-            videoHeight={project.height ?? 1080}
-            onChange={(patch) => {
-              patchTheme(patch)
-              persistTheme.mutate({ ...theme, ...patch })
-            }}
-            onPreset={(t) => {
-              setTheme(t)
-              persistTheme.mutate(t)
-            }}
-          />
-        </Card>
-
-        <div className="space-y-6 xl:col-start-2 xl:row-start-1 xl:min-h-0 xl:space-y-0 xl:bg-video-surface xl:p-6">
           {project.norm_url && project.width && project.height ? (
-            <>
-              <VideoPlayer
-                key={project.norm_url}
-                src={project.norm_url}
-                videoRef={videoRef}
-                width={project.width}
-                height={project.height}
-                cues={project.cues}
-                theme={theme}
-                overlays={overlays}
-                onTimeChange={setCurrentTime}
-                onPositionCommit={(positionPct) => persistTheme.mutate({ ...theme, positionPct })}
-                onOverlayCommit={commitOverlays}
-              />
-              <Timeline
-                videoRef={videoRef}
-                cues={project.cues}
-                overlays={overlays}
-                duration={project.duration ?? 0}
-                onCuesChange={(cues) => persistCues.mutate(cues)}
-                onOverlayCommit={commitOverlays}
-                onAddImage={(file) => addImage.mutate(file)}
-                onRemoveOverlay={(oid) => {
-                  removeOverlay(oid)
-                  commitOverlays()
-                }}
-                adding={addImage.isPending}
-              />
-            </>
+            <VideoPlayer
+              key={project.norm_url}
+              src={project.norm_url}
+              videoRef={videoRef}
+              width={project.width}
+              height={project.height}
+              cues={project.cues}
+              theme={theme}
+              overlays={overlays}
+              onTimeChange={setCurrentTime}
+              onPositionCommit={(positionPct) => {
+                const t = useEditor.getState().theme
+                persistTheme.mutate({ ...t, positionPct })
+              }}
+              onOverlayCommit={commitOverlays}
+            >
+              <div className="shrink-0 border-t border-white/10 px-3 py-2">
+                <Timeline
+                  videoRef={videoRef}
+                  cues={project.cues}
+                  overlays={overlays}
+                  duration={project.duration ?? 0}
+                  onCuesChange={(cues) => persistCues.mutate(cues)}
+                  onOverlayCommit={commitOverlays}
+                  onAddImage={(file) => addImage.mutate(file)}
+                  onAddText={addText}
+                  onRemoveOverlay={(oid) => {
+                    removeOverlay(oid)
+                    commitOverlays()
+                  }}
+                  adding={addImage.isPending}
+                />
+              </div>
+            </VideoPlayer>
           ) : (
-            <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+            <div className="m-4 flex aspect-video items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
               The preview appears once processing finishes.
             </div>
           )}
-
         </div>
 
-        <aside className="lg:col-start-2 xl:col-start-1 xl:row-start-1 xl:flex xl:min-h-0 xl:flex-col xl:border-r xl:border-white/10 xl:bg-background">
-          <header className="flex h-12 shrink-0 items-center justify-between px-4">
-            <h2 className="text-xs font-semibold tracking-[0.16em] text-text-muted">TRANSCRIPT</h2>
-            <span className="font-mono text-xs text-text-muted">{project.cues.length} cues</span>
-          </header>
-          <div className="min-h-0 flex-1 px-3 pb-3">
-            <TranscriptPanel
-              cues={project.cues}
-              currentTime={currentTime}
-              onChange={(cues) => persistCues.mutate(cues)}
-              onSeek={(t) => {
-                if (videoRef.current) videoRef.current.currentTime = t
-              }}
-            />
-          </div>
-        </aside>
-      </div>
+        <EditorInspector
+          subtitles={
+            <>
+              <header className="flex h-12 shrink-0 items-center justify-between px-4">
+                <h2 className="text-xs font-semibold tracking-[0.16em] text-text-muted">SUBTITLES</h2>
+                <span className="font-mono text-xs text-text-muted">{project.cues.length} cues</span>
+              </header>
+              <div className="min-h-0 flex-1 px-3 pb-3">
+                <TranscriptPanel
+                  cues={project.cues}
+                  currentTime={currentTime}
+                  onChange={(cues) => persistCues.mutate(cues)}
+                  onSeek={(t) => {
+                    if (videoRef.current) videoRef.current.currentTime = t
+                  }}
+                  onSelectCue={(cue) => {
+                    selectCue(cue.id)
+                    if (videoRef.current) videoRef.current.currentTime = cue.start
+                  }}
+                />
+              </div>
+            </>
+          }
+          styles={<StylePanel {...styleProps} pane="presets" />}
+          font={<StylePanel {...styleProps} pane="font" />}
+          layout={<StylePanel {...styleProps} pane="layout" />}
+        />
       </div>
     </Shell>
+  )
+}
+
+const renameSchema = z.object({
+  name: z.string().trim().min(1, 'Enter a project name').max(200, 'Use 200 characters or fewer'),
+})
+
+function ProjectTitle({ id, name }: { id: string; name: string }) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const form = useForm<z.infer<typeof renameSchema>>({
+    resolver: zodResolver(renameSchema),
+    defaultValues: { name },
+  })
+
+  useEffect(() => form.reset({ name }), [form, name])
+
+  const rename = useMutation({
+    mutationFn: (values: z.infer<typeof renameSchema>) => renameProjectFn({ data: { id, name: values.name } }),
+    onError: (e) => toast.error((e as Error).message),
+    onSuccess: ({ name: next }) => {
+      qc.invalidateQueries({ queryKey: qk.project(id) })
+      qc.invalidateQueries({ queryKey: qk.projects })
+      toast.success(`Renamed to ${next}`)
+      setEditing(false)
+    },
+  })
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="min-w-0 truncate text-left text-sm font-medium hover:text-brand"
+        title="Rename project"
+        onClick={() => {
+          form.reset({ name })
+          setEditing(true)
+        }}
+      >
+        {name}
+      </button>
+    )
+  }
+
+  return (
+    <form
+      className="min-w-0 max-w-64 flex-1"
+      onSubmit={form.handleSubmit((values) => {
+        if (values.name === name) {
+          setEditing(false)
+          return
+        }
+        rename.mutate(values)
+      })}
+    >
+      <Input
+        aria-label="Project name"
+        autoFocus
+        className="h-8"
+        disabled={rename.isPending}
+        {...form.register('name')}
+        onBlur={() => form.handleSubmit((values) => {
+          if (values.name === name) {
+            setEditing(false)
+            return
+          }
+          rename.mutate(values)
+        })()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            form.reset({ name })
+            setEditing(false)
+          }
+        }}
+      />
+    </form>
   )
 }
 

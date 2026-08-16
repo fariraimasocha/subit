@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { toAss } from './ass.ts'
 import { groupWords, type Word } from './cues.ts'
-import { assScaleFor, baselineShiftEm, metrics, THEMES } from './theme.ts'
+import { assBoxBorderPx, assScaleFor, baselineShiftEm, metrics, THEMES } from './theme.ts'
 
 const hormozi = THEMES[0]
 const say = (text: string): Word[] =>
@@ -81,6 +81,72 @@ test('uppercase and box mode reach the output', () => {
   assert.match(upper, /QUIET/)
   const boxed = styleLine(toAss(groupWords(say('x')), { ...hormozi, boxColor: '#000000' }, 1080, 1920))
   assert.equal(boxed.split(',')[15], '3', 'BorderStyle 3 is the opaque box')
+  assert.ok(Number(boxed.split(',')[16]) > 0, 'boxed styles need Outline padding for libass')
+})
+
+test('Kendrick preset emits a visible ASS box despite outlinePct 0', () => {
+  const kendrick = THEMES.find((t) => t.id === 'kendrick')!
+  const parts = styleLine(toAss(groupWords(say('x')), kendrick, 1080, 1920)).split(',')
+  assert.equal(parts[15], '3')
+  assert.ok(Number(parts[16]) > 0, `expected box outline px, got ${parts[16]}`)
+})
+
+/** ASS &HAABBGGRR& so a test can compare the style line to the Theme fields. */
+function bgr(hex: string) {
+  const h = hex.replace('#', '').slice(0, 6).padEnd(6, '0')
+  return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}&`.toUpperCase()
+}
+
+test('every preset maps preview colours onto the ASS fields libass actually paints', () => {
+  assert.ok(THEMES.length >= 16, `expected a full preset list, got ${THEMES.length}`)
+  const boxed = THEMES.filter((t) => t.boxColor)
+  assert.deepEqual(
+    boxed.map((t) => t.id),
+    ['kendrick', 'marker', 'lime', 'blackout'],
+  )
+  for (const theme of THEMES) {
+    const parts = styleLine(toAss(groupWords(say('one two')), theme, 1080, 1920)).split(',')
+    assert.equal(parts[3], bgr(theme.primary), `${theme.id} primary`)
+    if (theme.boxColor) {
+      assert.equal(parts[15], '3', `${theme.id} BorderStyle`)
+      assert.equal(parts[5], bgr(theme.boxColor), `${theme.id} box must be OutlineColour`)
+      assert.ok(Number(parts[16]) > 0, `${theme.id} boxed Outline padding`)
+    } else {
+      assert.equal(parts[15], '1', `${theme.id} BorderStyle`)
+      assert.equal(parts[5], bgr(theme.outline), `${theme.id} outline stroke`)
+    }
+    if (theme.highlightMode === 'color') {
+      const lines = dialogue(toAss(groupWords(say('one two')), theme, 1080, 1920))
+      assert.ok(
+        lines.some((l) => l.includes(`\\1c${bgr(theme.highlight)}`)),
+        `${theme.id} highlight override`,
+      )
+    }
+  }
+})
+
+test('Marker yellow box is OutlineColour, not the black outline stroke', () => {
+  const marker = THEMES.find((t) => t.id === 'marker')!
+  const parts = styleLine(toAss(groupWords(say('building your')), marker, 1080, 1920)).split(',')
+  assert.equal(parts[5], bgr('#FDE047'))
+  assert.notEqual(parts[5], bgr(marker.outline))
+  assert.equal(parts[3], bgr('#111111'))
+})
+
+test('boxed presets keep CSS padding, not a square Outline inset', () => {
+  for (const id of ['kendrick', 'marker', 'lime', 'blackout'] as const) {
+    const theme = THEMES.find((t) => t.id === id)!
+    const ass = toAss(groupWords(say('building your')), theme, 1080, 1920)
+    const { x, y } = assBoxBorderPx(metrics(theme, 1920).fontPx)
+    assert.ok(x > y, `${id} should pad more on the sides`)
+    assert.match(ass, new RegExp(`\\\\xbord${x}\\\\ybord${y}`))
+    assert.equal(styleLine(ass).split(',')[17], '0', `${id} must not drop a shadow on the box`)
+  }
+})
+
+test('stroked presets keep a 85 percent black shadow like the overlay', () => {
+  const parts = styleLine(toAss(groupWords(say('x')), hormozi, 1080, 1920)).split(',')
+  assert.match(parts[6], /^&H26/i)
 })
 
 test('braces and newlines in a word cannot inject override tags', () => {

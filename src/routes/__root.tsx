@@ -1,6 +1,8 @@
+import { LinkProvider } from '@cloudflare/kumo'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, HeadContent, Link, Outlet, Scripts } from '@tanstack/react-router'
 import { useState } from 'react'
+import { KumoRouterLink } from '~/components/kumo-link.tsx'
 import { ToastProvider } from '~/components/providers/ToastProvider.tsx'
 import styles from '~/globals.css?url'
 
@@ -19,8 +21,9 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: 'stylesheet', href: styles },
-      // One SVG, no .ico: the tile carries its own background, so it reads on
-      // both light and dark tab bars at every size.
+      // Chrome still fetches /favicon.ico even when an SVG is advertised. A
+      // missing ico is a globe in the tab, which is what the first deploy showed.
+      { rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
       { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
     ],
   }),
@@ -52,14 +55,16 @@ function RootDocument() {
       }),
   )
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" data-mode="dark">
       <head>
         <HeadContent />
       </head>
       <body>
         <QueryClientProvider client={queryClient}>
-          <Outlet />
-          <ToastProvider />
+          <LinkProvider component={KumoRouterLink}>
+            <Outlet />
+            <ToastProvider />
+          </LinkProvider>
         </QueryClientProvider>
         <Scripts />
       </body>

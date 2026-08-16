@@ -1,5 +1,5 @@
 import type { Cue } from './cues.ts'
-import { assScaleFor, baselineShiftEm, metrics, type Theme } from './theme.ts'
+import { assScaleFor, baselineShiftEm, assBoxBorderPx, metrics, type Theme } from './theme.ts'
 
 /**
  * ASS colour is &HAABBGGRR& with AA=00 meaning OPAQUE.
@@ -41,6 +41,13 @@ export function toAss(cues: Cue[], theme: Theme, width: number, height: number):
   // as the ones the overlay painted. Outline, Shadow and Spacing are plain
   // script pixels and need no such correction (verified by measuring a burn).
   const assFontSize = m.fontPx / assScaleFor(theme.fontFile)
+  // BorderStyle 3 uses Outline as box padding. outlinePct=0 presets like Kendrick
+  // still need a non-zero value or libass draws no box at all. Events then
+  // override with \xbord/\ybord so the box is not a square inset.
+  const boxBord = box ? assBoxBorderPx(m.fontPx) : null
+  const outlineForAss = boxBord ? boxBord.x : round(m.outlinePx)
+  // CSS text-shadow is rgba(0,0,0,0.85). ASS alpha is inverted: 00 opaque.
+  const shadowAlpha = box ? '00' : '26'
 
   const style = [
     'Style: Main',
@@ -48,8 +55,11 @@ export function toAss(cues: Cue[], theme: Theme, width: number, height: number):
     round(assFontSize),
     bgr(theme.primary),
     bgr(theme.primary), // SecondaryColour, unused without \k
-    bgr(theme.outline),
-    bgr(box ? theme.boxColor! : '#000000'),
+    // BorderStyle 3 paints the opaque box with OutlineColour, not BackColour.
+    // Putting boxColor in BackColour made Marker burn a black box (theme.outline)
+    // so the #111111 words vanished and only the red highlight survived.
+    bgr(box ? theme.boxColor! : theme.outline),
+    bgr(box ? theme.boxColor! : '#000000', shadowAlpha),
     theme.weight >= 700 ? -1 : 0, // Bold
     0, // Italic
     0, // Underline
@@ -59,8 +69,8 @@ export function toAss(cues: Cue[], theme: Theme, width: number, height: number):
     round(theme.letterSpacingEm * m.fontPx), // Spacing, ASS wants pixels
     0, // Angle
     box ? 3 : 1, // BorderStyle
-    round(m.outlinePx),
-    round(m.shadowPx),
+    outlineForAss,
+    box ? 0 : round(m.shadowPx),
     5, // Alignment: middle-centre
     0,
     0,
@@ -76,6 +86,8 @@ export function toAss(cues: Cue[], theme: Theme, width: number, height: number):
     'YCbCr Matrix: TV.709',
     `PlayResX: ${Math.round(width)}`,
     `PlayResY: ${Math.round(height)}`,
+    `LayoutResX: ${Math.round(width)}`,
+    `LayoutResY: ${Math.round(height)}`,
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
@@ -88,7 +100,13 @@ export function toAss(cues: Cue[], theme: Theme, width: number, height: number):
   // Shift the anchor up so the burned baseline lands where the browser put it.
   // See baselineShiftEm: CSS uses hhea metrics, libass uses the OS/2 win pair.
   const anchorY = m.centreY - m.fontPx * baselineShiftEm(theme.fontFile)
-  const pos = `{\\pos(${round(width / 2)},${round(anchorY)})}`
+  // \kern1 matches the browser’s default kerning. \xbord/\ybord keep a boxed
+  // preset’s inset equal to CSS padding-inline / padding-block.
+  const pos = `{${[
+    `\\pos(${round(width / 2)},${round(anchorY)})`,
+    '\\kern1',
+    boxBord ? `\\xbord${round(boxBord.x)}\\ybord${round(boxBord.y)}` : '',
+  ].join('')}}`
   const events: string[] = []
 
   for (const cue of cues) {

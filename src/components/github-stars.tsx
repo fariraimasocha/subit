@@ -36,7 +36,7 @@ export function GitHubStars() {
         <GithubMark className="size-4" />
         <span>GitHub</span>
         {typeof data?.count === 'number' && (
-          <span className="flex items-center gap-1 border-l pl-2 text-xs tabular-nums text-muted-foreground">
+          <span className="flex items-center gap-1 border-l border-white/10 pl-2 text-xs tabular-nums text-text-secondary">
             <Star className="size-3 fill-current" />
             {data.count.toLocaleString()}
           </span>

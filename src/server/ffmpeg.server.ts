@@ -183,7 +183,9 @@ export async function burn({ input, extraInputs = [], filter, cwd, durationSec, 
       // would abort the whole export.
       ...(filter ? ['-filter_complex', filter, '-map', '[v]', '-map', '0:a?'] : []),
       '-c:v', process.env.EXPORT_ENCODER || 'libx264',
-      '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      // Caption edges are the product. veryfast/crf 20 softened them next to the
+      // CSS overlay; fast/18 keeps the same encoder without a long export.
+      '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p',
       '-c:a', 'copy',
       '-movflags', '+faststart',
       out,

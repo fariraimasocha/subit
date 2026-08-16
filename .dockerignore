@@ -1,0 +1,13 @@
+# .env.local holds the R2 and Groq keys. COPY . . would bake them into an image
+# layer, where they survive every later RUN that "removes" them.
+.env.local
+node_modules
+dist
+.tanstack
+.git
+.github
+.cursor
+.agents
+.aidesigner
+.DS_Store
+auth.db

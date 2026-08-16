@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { UploadCloud } from 'lucide-react'
+import { ProgressBar } from '~/components/interior/progress-bar.tsx'
 import { Button } from '~/components/ui/button.tsx'
 import { cn } from '~/lib/utils.ts'
 import { qk, useConfig } from '~/lib/queries.ts'
@@ -143,15 +144,12 @@ function NewProject() {
 
       {pct !== null && (
         <div className="mt-6 rounded-2xl border border-border/40 bg-surface-2 p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">
-              {pct < 100 ? 'Uploading to R2' : 'Uploaded, creating the project'}
-            </span>
-            <span className="font-mono text-sm font-bold text-brand tabular-nums">{pct}%</span>
-          </div>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
-            <div className="h-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
-          </div>
+          <ProgressBar
+            value={pct}
+            label={pct < 100 ? 'Uploading to R2' : 'Uploaded, creating the project'}
+            pendingLabel="Starting"
+            completeLabel="Upload complete"
+          />
         </div>
       )}
 

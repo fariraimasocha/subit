@@ -1,48 +1,54 @@
-import * as React from "react"
-import { XIcon } from "lucide-react"
-import { Dialog as DialogPrimitive } from "radix-ui"
+import * as React from 'react'
+import { X } from '@phosphor-icons/react'
+import {
+  Dialog as KumoDialogPanel,
+  DialogClose as KumoDialogClose,
+  DialogDescription as KumoDialogDescription,
+  DialogRoot,
+  DialogTitle as KumoDialogTitle,
+  DialogTrigger as KumoDialogTrigger,
+} from '@cloudflare/kumo/components/dialog'
+import { Button as KumoButton } from '@cloudflare/kumo/components/button'
+import { cn } from '~/lib/utils'
 
-import { cn } from "~/lib/utils"
-import { Button } from "~/components/ui/button"
+function DialogDomProbe() {
+  React.useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      const dialog = document.querySelector('[role="dialog"]')
+      const buttons = dialog
+        ? Array.from(dialog.querySelectorAll('button')).map((b) => ({
+            text: (b.textContent ?? '').trim(),
+            aria: b.getAttribute('aria-label'),
+            w: Math.round(b.getBoundingClientRect().width),
+            h: Math.round(b.getBoundingClientRect().height),
+            kumo: b.getAttribute('data-kumo-component'),
+            part: b.getAttribute('data-kumo-part'),
+          }))
+        : []
+      const payload = {
+        title: dialog?.querySelector('h2')?.textContent ?? null,
+        buttonCount: buttons.length,
+        buttons,
+        hasKeepIt: buttons.some((b) => b.text === 'Keep it'),
+        emptyLabeled: buttons.filter((b) => !b.text && b.aria !== 'Close').length,
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix-4',hypothesisId:'F',location:'dialog.tsx:DialogDomProbe',message:'Dialog DOM snapshot',data:payload,timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [])
+  return null
+}
 
 function Dialog({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+}: React.ComponentProps<typeof DialogRoot>) {
+  return <DialogRoot {...props} />
 }
 
-function DialogTrigger({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
-}
-
-function DialogPortal({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
-}
-
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
-
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-  return (
-    <DialogPrimitive.Overlay
-      data-slot="dialog-overlay"
-      className={cn(
-        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
-        className
-      )}
-      {...props}
-    />
-  )
+function DialogTrigger({ children, ...props }: React.ComponentProps<typeof KumoDialogTrigger>) {
+  return <KumoDialogTrigger {...props}>{children}</KumoDialogTrigger>
 }
 
 function DialogContent({
@@ -50,94 +56,92 @@ function DialogContent({
   children,
   showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean
-}) {
+}: React.ComponentProps<typeof KumoDialogPanel> & { showCloseButton?: boolean }) {
   return (
-    <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none dark:border-white/10 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
-    </DialogPortal>
-  )
-}
-
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
-      {...props}
-    />
-  )
-}
-
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
-}) {
-  return (
-    <div
-      data-slot="dialog-footer"
-      className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        className
-      )}
-      {...props}
-    >
+    <KumoDialogPanel className={cn('relative p-6', className)} size="lg" {...props}>
+      <DialogDomProbe />
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
-        </DialogPrimitive.Close>
+        <KumoDialogClose
+          aria-label="Close"
+          render={(closeProps) => (
+            <KumoButton
+              {...closeProps}
+              variant="secondary"
+              shape="square"
+              className="absolute top-4 right-4"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </KumoButton>
+          )}
+        />
       )}
-    </div>
+    </KumoDialogPanel>
   )
 }
 
-function DialogTitle({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div className={cn('flex flex-col gap-2 text-center sm:text-left', className)} {...props} />
+}
+
+function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <DialogPrimitive.Title
-      data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
-      {...props}
-    />
+    <div className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props} />
   )
 }
 
-function DialogDescription({
-  className,
+function DialogTitle({ className, ...props }: React.ComponentProps<typeof KumoDialogTitle>) {
+  return <KumoDialogTitle className={cn('text-lg font-semibold leading-none', className)} {...props} />
+}
+
+function DialogDescription({ className, ...props }: React.ComponentProps<typeof KumoDialogDescription>) {
+  return <KumoDialogDescription className={cn('text-sm text-muted-foreground', className)} {...props} />
+}
+
+function DialogClose({
+  asChild,
+  children,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<'button'> & { asChild?: boolean }) {
   return (
-    <DialogPrimitive.Description
-      data-slot="dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
+    <KumoDialogClose
+      render={(closeProps) => {
+        const childEl = asChild && React.isValidElement(children) ? children : null
+        const originalChildText = childEl
+          ? typeof (childEl.props as { children?: unknown }).children === 'string'
+            ? (childEl.props as { children: string }).children
+            : typeof (childEl.props as { children?: unknown }).children
+          : typeof children === 'string'
+            ? children
+            : typeof children
+        const closePropKeys = Object.keys(closeProps as object)
+        const closeChildren = (closeProps as { children?: unknown }).children
+        // #region agent log
+        fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix',hypothesisId:'A',location:'dialog.tsx:DialogClose',message:'DialogClose render props',data:{asChild:!!asChild,hasValidChild:!!childEl,originalChildText,closePropKeys,hasCloseChildren:Object.prototype.hasOwnProperty.call(closeProps,'children'),closeChildrenType:typeof closeChildren,closeChildrenIsUndefined:closeChildren===undefined,closeChildrenIsNull:closeChildren===null,shape:(closeProps as {shape?:unknown}).shape,size:(closeProps as {size?:unknown}).size,icon:typeof (closeProps as {icon?:unknown}).icon,nativeButton:(closeProps as {nativeButton?:unknown}).nativeButton},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        if (childEl) {
+          const { children: _closeChildren, ...safeCloseProps } = closeProps as typeof closeProps & {
+            children?: unknown
+          }
+          const child = childEl as React.ReactElement<{ children?: React.ReactNode }>
+          const cloned = React.cloneElement(child, {
+            ...safeCloseProps,
+            ...props,
+            children: child.props.children,
+          })
+          const clonedChildren = (cloned.props as { children?: unknown }).children
+          // #region agent log
+          fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix',hypothesisId:'A',location:'dialog.tsx:DialogClose:clone',message:'cloneElement result children',data:{clonedChildrenType:typeof clonedChildren,clonedChildrenIsUndefined:clonedChildren===undefined,clonedChildrenIsNull:clonedChildren===null,clonedText:typeof clonedChildren==='string'?clonedChildren:null,childrenWiped:originalChildText==='Keep it'&&clonedChildren!=='Keep it'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          return cloned
+        }
+        return (
+          <KumoButton {...closeProps} {...props}>
+            {children}
+          </KumoButton>
+        )
+      }}
     />
   )
 }
@@ -149,8 +153,6 @@ export {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 }

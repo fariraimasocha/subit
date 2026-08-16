@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "subit",
+  "main": "worker.ts",
+  "compatibility_date": "2026-08-05",
+
+  "containers": [
+    {
+      "class_name": "Subit",
+      "image": "./Dockerfile",
+      // ffmpeg burning captions into a 1080p video wants real cores and real
+      // scratch space: norm.mp4, the overlays and the export all land on disk
+      // at once. Drop to standard-1 if the bill matters more than the wait.
+      "instance_type": "standard-2",
+      // See the fetch handler: the job state is in one process's memory.
+      "max_instances": 1
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "SUBIT", "class_name": "Subit" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Subit"] }],
+
+  // Not secret: these are ids and switches, and they are already in the repo's
+  // .env.local shape. The four real credentials go in with `wrangler secret put`.
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "4b0774f7fcd2db73dbe26b3904dc632e",
+    "CLOUDFLARE_S3_API": "https://4b0774f7fcd2db73dbe26b3904dc632e.r2.cloudflarestorage.com/subit",
+    "D1_DATABASE_ID": "aa0a5500-ac31-4860-a9e1-9060ed1c8d1a",
+    "R2_BUCKET": "subit",
+    "EXPORT_ENCODER": "libx264"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "subit",
+      "database_id": "aa0a5500-ac31-4860-a9e1-9060ed1c8d1a"
+    }
+  ]
+}

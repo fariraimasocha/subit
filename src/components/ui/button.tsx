@@ -1,64 +1,132 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+import * as React from 'react'
+import { Button as KumoButton, LinkButton, type ButtonProps as KumoButtonProps } from '@cloudflare/kumo/components/button'
+import { cn } from '~/lib/utils'
 
-import { cn } from "~/lib/utils"
+type Variant = 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
+type Size = 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg'
 
-const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
-        outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+const variantMap: Record<Variant, KumoButtonProps['variant']> = {
+  // Secondary avoids Kumo primary's blue emphasis gradient; brand color comes from subit-btn-brand.
+  default: 'secondary',
+  destructive: 'destructive',
+  outline: 'outline',
+  secondary: 'secondary',
+  ghost: 'ghost',
+  link: 'ghost',
+}
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+const sizeMap: Record<Exclude<Size, 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg'>, KumoButtonProps['size']> = {
+  default: 'base',
+  xs: 'xs',
+  sm: 'sm',
+  lg: 'lg',
+}
 
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
+/** Subit tokens win over Kumo defaults so CTAs stay brand-orange and outlines stay readable on dark surfaces. */
+const variantClass: Record<Variant, string> = {
+  default: 'subit-btn-brand shadow-none ring-1 ring-brand/40',
+  destructive: '',
+  outline:
+    'border border-white/10 !bg-transparent !text-foreground ring-white/10 hover:!bg-surface-2 hover:!text-foreground',
+  secondary: '!bg-surface-2 !text-foreground ring-white/10 hover:!bg-surface-3',
+  ghost: '!bg-transparent !text-foreground hover:!bg-surface-2 hover:!text-foreground shadow-none',
+  link: '!bg-transparent !text-brand underline underline-offset-4 hover:!text-brand/90 shadow-none ring-0',
+}
+
+const iconSizeClass: Partial<Record<Size, string>> = {
+  icon: 'size-9 justify-center p-0',
+  'icon-xs': 'size-6 justify-center p-0',
+  'icon-sm': 'size-8 justify-center p-0',
+  'icon-lg': 'size-10 justify-center p-0',
+}
+
+function kumoSize(size: Size, iconOnly: boolean): KumoButtonProps['size'] {
+  if (iconOnly) return 'base'
+  if (size in sizeMap) return sizeMap[size as keyof typeof sizeMap]
+  return 'base'
+}
+
+function buttonClassName(variant: Variant, size: Size, iconOnly: boolean, className?: string) {
+  return cn(
+    variantClass[variant],
+    iconOnly ? iconSizeClass[size] : 'justify-center',
+    className,
   )
 }
 
-export { Button, buttonVariants }
+type Props = React.ComponentProps<'button'> & {
+  variant?: Variant
+  size?: Size
+  asChild?: boolean
+  loading?: boolean
+}
+
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  asChild,
+  children,
+  loading,
+  title,
+  ...props
+}: Omit<React.ComponentProps<'button'>, 'title'> & {
+  variant?: Variant
+  size?: Size
+  asChild?: boolean
+  loading?: boolean
+  title?: string
+}) {
+  const kumoVariant = variantMap[variant]
+  const iconOnly = size === 'icon' || size === 'icon-xs' || size === 'icon-sm' || size === 'icon-lg'
+  const childCount = React.Children.count(children)
+  // #region agent log
+  if (variant === 'outline' || variant === 'destructive' || childCount === 0) {
+    fetch('http://127.0.0.1:7798/ingest/24c2d816-da87-4d95-aeda-612f37f3fd00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d8dc48'},body:JSON.stringify({sessionId:'d8dc48',runId:'post-fix-3',hypothesisId:'C',location:'button.tsx:Button',message:'Button render children/shape',data:{variant,size,iconOnly,childCount,childrenType:typeof children,childrenIsUndefined:children===undefined,text:typeof children==='string'?children:null,shapeFromProps:(props as {shape?:unknown}).shape,iconFromProps:typeof (props as {icon?:unknown}).icon},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
+
+  if (asChild && React.isValidElement(children)) {
+    const child = children as React.ReactElement<{
+      className?: string
+      to?: string
+      href?: string
+      children?: React.ReactNode
+    }>
+    const href = child.props.href ?? child.props.to
+    if (href) {
+      return (
+        <LinkButton
+          href={href}
+          variant={kumoVariant}
+          size={kumoSize(size, iconOnly)}
+          shape={iconOnly ? 'square' : 'base'}
+          className={buttonClassName(variant, size, iconOnly, cn(className, child.props.className))}
+          {...(props as object)}
+        >
+          {child.props.children}
+        </LinkButton>
+      )
+    }
+    return React.cloneElement(child, {
+      className: cn(className, child.props.className),
+      ...props,
+    })
+  }
+
+  return (
+    <KumoButton
+      variant={kumoVariant}
+      size={kumoSize(size, iconOnly)}
+      shape={iconOnly ? 'square' : 'base'}
+      loading={loading}
+      {...(title !== undefined ? { title } : {})}
+      className={buttonClassName(variant, size, iconOnly, className)}
+      {...(props as KumoButtonProps)}
+    >
+      {children}
+    </KumoButton>
+  )
+}
+
+export { Button }
