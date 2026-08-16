@@ -3,7 +3,6 @@ import {
   AlignmentGuides,
   applyAlignmentGuides,
   hideAlignmentGuides,
-  noteOverlaySnapChange,
   snapOverlayAxes,
 } from '~/components/alignment-guides.tsx'
 import { clampOverlay, isTextOverlay, type Overlay, type TextOverlayData } from '~/lib/overlays.ts'
@@ -32,8 +31,6 @@ export function TextOverlay({ videoRef, overlays, boxHeight, duration, onCommit 
     mode: 'move' | 'size'
     box: DOMRect
     o: TextOverlayData
-    snapX: number | null
-    snapY: number | null
   } | null>(null)
   const texts = overlays.filter(isTextOverlay)
   const draggable = Boolean(onCommit)
@@ -75,7 +72,7 @@ export function TextOverlay({ videoRef, overlays, boxHeight, duration, onCommit 
     selectOverlay(o.id)
     useEditor.getState().setInspectorTab('font')
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { id: e.pointerId, mode, box, o, snapX: null, snapY: null }
+    drag.current = { id: e.pointerId, mode, box, o }
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -87,7 +84,6 @@ export function TextOverlay({ videoRef, overlays, boxHeight, duration, onCommit 
     if (d.mode === 'move') {
       const snap = snapOverlayAxes(x, y)
       applyAlignmentGuides(guidesRef.current, snap.snappedX, snap.snappedY)
-      noteOverlaySnapChange(d, 'text', x, y, snap.snappedX, snap.snappedY)
       next = { ...d.o, xPct: snap.xPct, yPct: snap.yPct }
     } else {
       next = {

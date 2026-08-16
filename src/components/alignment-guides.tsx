@@ -15,15 +15,6 @@ export {
 const LINE = 'rgba(56, 189, 248, 0.9)'
 const LINE_SOFT = 'rgba(56, 189, 248, 0.55)'
 
-export type OverlaySnapMem = {
-  snapX: number | null
-  snapY: number | null
-}
-
-export type CaptionSnapMem = {
-  snapY: number | null
-}
-
 /**
  * Toggle guide lines by writing display on the existing nodes. React must not
  * own this: overlay drags already patch the store every move, and a useState
@@ -47,26 +38,6 @@ export function applyAlignmentGuides(
 
 export function hideAlignmentGuides(root: HTMLElement | null) {
   applyAlignmentGuides(root, null, null)
-}
-
-export function noteOverlaySnapChange(
-  mem: OverlaySnapMem,
-  kind: 'text' | 'image',
-  xPct: number,
-  yPct: number,
-  snappedX: number | null,
-  snappedY: number | null,
-) {
-  if (mem.snapX === snappedX && mem.snapY === snappedY) return
-  mem.snapX = snappedX
-  mem.snapY = snappedY
-  if (snappedX === null && snappedY === null) return
-}
-
-export function noteCaptionSnapChange(mem: CaptionSnapMem, positionPct: number, snapped: number | null) {
-  if (mem.snapY === snapped) return
-  mem.snapY = snapped
-  if (snapped === null) return
 }
 
 const labelStyle: CSSProperties = {

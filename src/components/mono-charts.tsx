@@ -69,43 +69,41 @@ export function ActivityHeatmap({ stats }: { stats: DashboardStats }) {
       hint="20 weeks by 7 days. Each tile is a day you sent a clip."
     >
       <div className="flex gap-2">
-          <div className="grid shrink-0 grid-rows-7 content-around py-0.5 font-mono text-[10px] leading-none text-text-muted">
-            <span>S</span>
-            <span>M</span>
-            <span>T</span>
-            <span>W</span>
-            <span>T</span>
-            <span>F</span>
-            <span>S</span>
+        <div className="grid shrink-0 grid-rows-7 content-around py-0.5 font-mono text-[10px] leading-none text-text-muted">
+          <span>S</span>
+          <span>M</span>
+          <span>T</span>
+          <span>W</span>
+          <span>T</span>
+          <span>F</span>
+          <span>S</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="relative mb-2 h-4">
+            {stats.monthLabels.map((m) => (
+              <span
+                key={`${m.week}-${m.label}`}
+                className="absolute font-mono text-[11px] text-text-muted"
+                style={{ left: `${(m.week / 20) * 100}%` }}
+              >
+                {m.label}
+              </span>
+            ))}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="relative mb-2 h-4">
-              {stats.monthLabels.map((m) => (
-                <span
-                  key={`${m.week}-${m.label}`}
-                  className="absolute font-mono text-[11px] text-text-muted"
-                  style={{ left: `${(m.week / 20) * 100}%` }}
-                >
-                  {m.label}
-                </span>
-              ))}
-            </div>
-            <div
-              ref={gridRef}
-              className="grid w-full grid-flow-col grid-rows-7 gap-1"
-              style={{ gridTemplateColumns: 'repeat(20, minmax(0, 1fr))' }}
-            >
-              {stats.heatmap.map((cell: HeatCell) => (
-                <span
-                  key={cell.key}
-                  title={`${cell.label}: ${cell.count} upload${cell.count === 1 ? '' : 's'}`}
-                  className={cn(
-                    'aspect-square min-w-0 rounded-full transition-colors',
-                    heatTone(cell.count),
-                  )}
-                />
-              ))}
-            </div>
+          <div
+            className="grid w-full grid-flow-col grid-rows-7 gap-1"
+            style={{ gridTemplateColumns: 'repeat(20, minmax(0, 1fr))' }}
+          >
+            {stats.heatmap.map((cell: HeatCell) => (
+              <span
+                key={cell.key}
+                title={`${cell.label}: ${cell.count} upload${cell.count === 1 ? '' : 's'}`}
+                className={cn(
+                  'aspect-square min-w-0 rounded-full transition-colors',
+                  heatTone(cell.count),
+                )}
+              />
+            ))}
           </div>
         </div>
       </div>

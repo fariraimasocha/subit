@@ -3,7 +3,6 @@ import {
   AlignmentGuides,
   applyAlignmentGuides,
   hideAlignmentGuides,
-  noteOverlaySnapChange,
   snapOverlayAxes,
 } from '~/components/alignment-guides.tsx'
 import { clampOverlay, isImageOverlay, type Overlay } from '~/lib/overlays.ts'
@@ -41,8 +40,6 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     mode: 'move' | 'size'
     box: DOMRect
     o: Overlay
-    snapX: number | null
-    snapY: number | null
   } | null>(null)
   const images = overlays.filter(isImageOverlay)
   const draggable = Boolean(onCommit)
@@ -75,7 +72,7 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     e.stopPropagation()
     selectOverlay(o.id)
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { id: e.pointerId, mode, box, o, snapX: null, snapY: null }
+    drag.current = { id: e.pointerId, mode, box, o }
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -89,7 +86,6 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     if (d.mode === 'move') {
       const snap = snapOverlayAxes(x, y)
       applyAlignmentGuides(guidesRef.current, snap.snappedX, snap.snappedY)
-      noteOverlaySnapChange(d, 'image', x, y, snap.snappedX, snap.snappedY)
       next = { ...d.o, xPct: snap.xPct, yPct: snap.yPct }
     } else {
       next = { ...d.o, widthPct: Math.abs(x - d.o.xPct) * 2 }
