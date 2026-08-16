@@ -49,9 +49,10 @@ export const useEditor = create<EditorState>((set) => ({
   setCaptionsVisible: (captionsVisible) => set({ captionsVisible }),
   setAspect: (aspect) => set({ aspect }),
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
-  selectCue: (selectedCueId) => set({ selectedCueId }),
+  selectCue: (selectedCueId) =>
+    set(selectedCueId ? { selectedCueId, selectedOverlayId: null } : { selectedCueId }),
   setOverlays: (overlays) => set({ overlays }),
-  addOverlay: (o) => set((s) => ({ overlays: [...s.overlays, o], selectedOverlayId: o.id })),
+  addOverlay: (o) => set((s) => ({ overlays: [...s.overlays, o], selectedOverlayId: o.id, selectedCueId: null })),
   patchOverlay: (id, p) =>
     set((s) => ({ overlays: s.overlays.map((o) => (o.id === id ? ({ ...o, ...p } as Overlay) : o)) })),
   removeOverlay: (id) =>
@@ -59,5 +60,6 @@ export const useEditor = create<EditorState>((set) => ({
       overlays: s.overlays.filter((o) => o.id !== id),
       selectedOverlayId: s.selectedOverlayId === id ? null : s.selectedOverlayId,
     })),
-  selectOverlay: (selectedOverlayId) => set({ selectedOverlayId }),
+  selectOverlay: (selectedOverlayId) =>
+    set(selectedOverlayId ? { selectedOverlayId, selectedCueId: null } : { selectedOverlayId }),
 }))

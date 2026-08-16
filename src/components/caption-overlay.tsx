@@ -1,4 +1,11 @@
 import { useEffect, useRef, type RefObject } from 'react'
+import {
+  AlignmentGuides,
+  applyAlignmentGuides,
+  hideAlignmentGuides,
+  noteCaptionSnapChange,
+  snapPct,
+} from '~/components/alignment-guides.tsx'
 import type { Cue } from '~/lib/cues.ts'
 import { boxPaddingPx, CAPTION_LINE_HEIGHT, metrics, themePaintKey, type Theme } from '~/lib/theme.ts'
 import { useEditor } from '~/store/editor.ts'
@@ -45,10 +52,11 @@ function applyLayerStyle(layer: HTMLDivElement, t: Theme, height: number, skipTo
  */
 export function CaptionOverlay({ videoRef, cues, boxHeight, visible, onCommit }: Props) {
   const layerRef = useRef<HTMLDivElement>(null)
+  const guidesRef = useRef<HTMLDivElement>(null)
   const cursor = useRef(0)
   const painted = useRef<string | null>(null)
   const measuredHeight = useRef(0)
-  const drag = useRef<{ id: number; box: DOMRect; offset: number; pct: number } | null>(null)
+  const drag = useRef<{ id: number; box: DOMRect; offset: number; pct: number; snapY: number | null } | null>(null)
   const patchTheme = useEditor((s) => s.patchTheme)
   const draggable = Boolean(onCommit) && visible
 
@@ -152,13 +160,18 @@ export function CaptionOverlay({ videoRef, cues, boxHeight, visible, onCommit }:
       box,
       offset: block.top + block.height / 2 - e.clientY,
       pct: useEditor.getState().theme.positionPct,
+      snapY: null,
     }
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current
     if (d?.id !== e.pointerId) return
-    d.pct = clamp(((e.clientY + d.offset - d.box.top) / d.box.height) * 100, 5, 95)
+    const raw = clamp(((e.clientY + d.offset - d.box.top) / d.box.height) * 100, 5, 95)
+    const snap = snapPct(raw)
+    d.pct = snap.value
+    applyAlignmentGuides(guidesRef.current, null, snap.snapped)
+    noteCaptionSnapChange(d, raw, snap.snapped)
     // Write the overlay directly. Going through the store here rerendered the
     // whole editor on every pointermove and made the caption lag the cursor.
     if (layerRef.current) layerRef.current.style.top = `${(d.pct / 100) * d.box.height}px`
@@ -168,6 +181,7 @@ export function CaptionOverlay({ videoRef, cues, boxHeight, visible, onCommit }:
     const d = drag.current
     if (d?.id !== e.pointerId) return
     drag.current = null
+    hideAlignmentGuides(guidesRef.current)
     e.currentTarget.releasePointerCapture(e.pointerId)
     patchTheme({ positionPct: d.pct })
     onCommit?.(d.pct)
@@ -198,6 +212,7 @@ export function CaptionOverlay({ videoRef, cues, boxHeight, visible, onCommit }:
           paintOrder: 'stroke fill',
         }}
       />
+      <AlignmentGuides rootRef={guidesRef} />
     </div>
   )
 }

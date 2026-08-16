@@ -1,13 +1,17 @@
+import { UploadSimple } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Clapperboard, Upload } from 'lucide-react'
+import { Clapperboard } from 'lucide-react'
+import { useMemo } from 'react'
 import { EmptyState } from '~/components/empty-state.tsx'
+import { ActivityHeatmap, StatKpi, StatusTreemap, UploadWave } from '~/components/mono-charts.tsx'
 import { ProjectCard } from '~/components/project-card.tsx'
 import { SetupNotice } from '~/components/setup-notice.tsx'
-import { Button } from '~/components/ui/button.tsx'
-import { Card, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
 import { SkeletonSwap } from '~/components/interior/skeleton-swap.tsx'
 import { TextReveal } from '~/components/interior/text-reveal.tsx'
+import { Button } from '~/components/ui/button.tsx'
+import { Card, CardDescription, CardHeader, CardTitle } from '~/components/ui/card.tsx'
+import { dashboardStats } from '~/lib/dashboard-stats.ts'
 import { projectsQuery, useConfig } from '~/lib/queries.ts'
 
 export const Route = createFileRoute('/dashboard/')({ component: DashboardHome })
@@ -17,66 +21,44 @@ function DashboardHome() {
   const { data, isPending, error } = useQuery(projectsQuery(ready))
   const projects = data ?? []
   const recent = projects.slice(0, 6)
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    const w = window as Window & { __subitDashRenders?: number }
-    w.__subitDashRenders = (w.__subitDashRenders ?? 0) + 1
-    if (w.__subitDashRenders <= 8 || w.__subitDashRenders % 25 === 0) {
-      fetch('http://127.0.0.1:7573/ingest/9119238e-d35c-4221-b9d4-77a9e6ffca99', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aa72d7' },
-        body: JSON.stringify({
-          sessionId: 'aa72d7',
-          runId: 'freeze-2',
-          hypothesisId: 'M',
-          location: 'dashboard.index.tsx:render',
-          message: 'dashboard home render',
-          data: {
-            n: w.__subitDashRenders,
-            ready,
-            isPending,
-            hasError: Boolean(error),
-            projectCount: projects.length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-    }
-  }
-  // #endregion
+  const stats = useMemo(() => dashboardStats(projects), [projects])
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <TextReveal
-            text="Welcome back"
-            className="block text-3xl font-semibold tracking-tight text-foreground"
+            text="Studio"
+            className="block text-4xl font-semibold tracking-tight text-foreground"
           />
-          <p className="mt-1.5 text-sm text-text-secondary">
-            Burn word-by-word captions into your short-form video
+          <p className="mt-2 max-w-xl text-sm text-text-secondary">
+            Word-level captions, burned into the picture. The tiles below are your last 20 weeks of
+            work.
           </p>
         </div>
         <Button asChild className="shadow-lg shadow-brand/25">
           <Link to="/dashboard/new">
-            <Upload className="size-4" />
+            <UploadSimple className="size-4" />
             New upload
           </Link>
         </Button>
       </header>
 
-      {/* The design's dropzone card. The real drop handling lives on the new
-          project page; this is the doorway to it, styled like the target. */}
       <Link
         to="/dashboard/new"
-        className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 bg-surface-1 px-6 py-12 text-center transition-colors hover:border-brand/60"
+        className="flex items-center justify-between gap-4 rounded-3xl border border-dashed border-white/12 bg-surface-2/70 px-5 py-4 transition-colors hover:border-foreground/30"
       >
-        <span className="flex size-12 items-center justify-center rounded-full bg-surface-3">
-          <Upload className="size-5 text-brand" />
+        <span className="flex items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-full bg-surface-3">
+            <UploadSimple className="size-4 text-foreground" />
+          </span>
+          <span>
+            <span className="block text-sm font-semibold">Drop a clip, or browse</span>
+            <span className="block text-xs text-text-muted">MP4 or MOV up to 2 GB. Straight to R2.</span>
+          </span>
         </span>
-        <span className="text-sm font-semibold">Drop a clip here or click to browse</span>
-        <span className="text-xs text-text-muted">
-          MP4 or MOV up to 2 GB. Uploads go straight to R2.
+        <span className="hidden font-mono text-[11px] tracking-[0.18em] text-text-muted uppercase sm:block">
+          Start ingest
         </span>
       </Link>
 
@@ -92,19 +74,37 @@ function DashboardHome() {
       )}
 
       {ready && isPending && (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
             <SkeletonSwap
               key={i}
               ready={false}
-              reserve={256}
-              label="Recent project"
-              className="rounded-2xl border border-white/10 p-4"
+              reserve={140}
+              label="Studio metric"
+              className="rounded-3xl border border-white/8 p-5"
             >
               {null}
             </SkeletonSwap>
           ))}
         </div>
+      )}
+
+      {ready && !isPending && !error && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatKpi label="Projects" value={stats.total} weekly={stats.weekly} />
+            <StatKpi label="Ready" value={stats.ready} weekly={stats.weekly} />
+            <StatKpi label="In flight" value={stats.inFlight} weekly={stats.weekly} />
+            <StatKpi label="Exported" value={stats.exported} weekly={stats.weekly} />
+          </div>
+
+          <ActivityHeatmap stats={stats} />
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <UploadWave weekly={stats.weekly} />
+            <StatusTreemap rows={stats.statusBars} />
+          </div>
+        </>
       )}
 
       {ready && !isPending && !error && recent.length === 0 && (
@@ -121,10 +121,7 @@ function DashboardHome() {
             <h2 className="font-mono text-xs font-semibold tracking-[0.18em] text-text-muted uppercase">
               Recent projects
             </h2>
-            <Link
-              to="/dashboard/projects"
-              className="text-sm font-medium text-brand hover:underline"
-            >
+            <Link to="/dashboard/projects" className="text-sm font-medium text-brand hover:underline">
               View all
             </Link>
           </div>

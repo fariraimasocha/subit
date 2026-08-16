@@ -1,7 +1,7 @@
 import { ImagePlus, Minus, Plus, Trash2, Type } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Button } from '~/components/ui/button.tsx'
-import { retime, type Cue } from '~/lib/cues.ts'
+import { clusterCues, retimeCluster, type Cue } from '~/lib/cues.ts'
 import { clampOverlay, isTextOverlay, MIN_SPAN, type Overlay } from '~/lib/overlays.ts'
 import { cn } from '~/lib/utils.ts'
 import { useEditor } from '~/store/editor.ts'
@@ -21,15 +21,23 @@ type Props = {
 }
 
 const ACCEPT = '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp'
-const ZOOMS = [10, 20, 50, 100, 200]
+/** Discrete px/s rungs above the readable window. Fit is always the zoom-out floor. */
+const ZOOMS = [25, 50, 80, 120, 200, 320]
+/** Fallback window when there are no cues to measure. */
+const WINDOW_S = 10
+/** A phrase chip should be at least this wide so a full line can be read. */
+const TARGET_BLOCK_W = 200
+/** Measured from live chips: 190/31 and 217/37 both sit near 6.2px per character. */
+const CHAR_PX = 6.2
+const MAX_WINDOW_PPS = 320
 /** Grab zone at either end of a block, in px. Below this it is all move. */
 const EDGE = 7
 const RULER_H = 24
-/** Images get the taller lane: their block carries a thumbnail, a cue's is text. */
-const LANE_H = { cues: 34, images: 44 }
-/** Below this a label is one squashed letter per block, so the bar goes bare. */
-const LABEL_MIN_W = 36
+/** Captions need room for text-sm; overlays stay a hair shorter. */
+const LANE_H = { cues: 54, images: 48 }
 const GUTTER_W = 78
+
+type Zoom = 'fit' | 'window' | number
 
 /**
  * The editing surface. Two lanes over a shared time ruler: captions, which write
@@ -55,9 +63,9 @@ export function Timeline({
   const headRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [boxWidth, setBoxWidth] = useState(0)
-  /** null means fit the whole clip in the box. */
-  const [zoom, setZoom] = useState<number | null>(null)
-  const { selectedCueId, selectCue, selectedOverlayId, selectOverlay, patchOverlay } = useEditor()
+  /** 'window' = readable cue width. 'fit' = whole clip. number = explicit px/s. */
+  const [zoom, setZoom] = useState<Zoom>('window')
+  const { selectedCueId, selectCue, selectedOverlayId, selectOverlay, patchOverlay, setInspectorTab } = useEditor()
 
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -70,8 +78,23 @@ export function Timeline({
 
   const dur = duration > 0 ? duration : 0
   const fit = dur > 0 && boxWidth > 0 ? boxWidth / dur : 1
-  const pps = zoom ?? fit
+  const clusters = useMemo(() => clusterCues(cues), [cues])
+  const typicalCue = spanPercentile(
+    clusters.map((c) => c.end - c.start),
+    0.25,
+  )
+  const fallbackPps = boxWidth > 0 ? boxWidth / WINDOW_S : 1
+  const textPps = clusters.reduce((max, c) => {
+    const need = (c.text.length * CHAR_PX) / Math.max(c.end - c.start, 0.2)
+    return need > max ? need : max
+  }, 0)
+  const windowPps =
+    boxWidth > 0
+      ? Math.min(MAX_WINDOW_PPS, Math.max(fallbackPps, TARGET_BLOCK_W / typicalCue, textPps))
+      : 1
+  const pps = zoom === 'fit' ? fit : zoom === 'window' ? windowPps : zoom
   const width = Math.max(dur * pps, boxWidth)
+  const windowSec = boxWidth > 0 && pps > 0 ? boxWidth / pps : WINDOW_S
 
   // The playhead is the one thing that moves every frame, so it is the one thing
   // that never touches React.
@@ -104,9 +127,24 @@ export function Timeline({
   }
 
   const zoomBy = (dir: 1 | -1) => {
-    const i = ZOOMS.findIndex((z) => z > pps + 0.01)
-    const next = dir === 1 ? (i < 0 ? null : ZOOMS[i]) : ZOOMS.filter((z) => z < pps - 0.01).pop() ?? null
-    setZoom(next)
+    const levels: { mode: Zoom; pps: number }[] = [
+      { mode: 'fit', pps: fit },
+      { mode: 'window', pps: windowPps },
+      ...ZOOMS.map((z) => ({ mode: z as Zoom, pps: z })),
+    ]
+    levels.sort((a, b) => a.pps - b.pps)
+    const unique: { mode: Zoom; pps: number }[] = []
+    for (const level of levels) {
+      if (level.mode !== 'fit' && level.pps <= fit + 0.01) continue
+      const last = unique[unique.length - 1]
+      if (last && Math.abs(last.pps - level.pps) < 1) continue
+      unique.push(level)
+    }
+    const next =
+      dir === 1
+        ? unique.find((level) => level.pps > pps + 0.01)?.mode
+        : [...unique].reverse().find((level) => level.pps < pps - 0.01)?.mode
+    if (next !== undefined) setZoom(next)
   }
 
   return (
@@ -115,8 +153,18 @@ export function Timeline({
         <span className="text-sm font-medium">Timeline</span>
         <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">
           {fmt(dur)}
-          {zoom ? ` at ${zoom} px/s` : ' fitted'}
+          {zoom === 'fit' ? ' fitted' : zoom === 'window' ? ` ${Math.max(1, Math.round(windowSec))}s window` : ` at ${zoom} px/s`}
         </span>
+        {selectedCueId &&
+          (() => {
+            const selected = clusters.find((c) => c.ids.includes(selectedCueId))
+            if (!selected) return null
+            return (
+              <span className="ml-3 hidden min-w-0 max-w-md truncate text-xs text-foreground sm:inline" title={selected.text}>
+                {selected.text}
+              </span>
+            )
+          })()}
 
         <div className="ml-auto" />
 
@@ -220,23 +268,23 @@ export function Timeline({
             </div>
 
             <Lane height={LANE_H.cues}>
-              {cues.map((c) => (
+              {clusters.map((c) => (
                 <Block
                   key={c.id}
                   start={c.start}
                   end={c.end}
                   pps={pps}
                   duration={dur}
-                  selected={c.id === selectedCueId}
-                  className="bg-brand/30 hover:bg-brand/40"
+                  selected={Boolean(selectedCueId && c.ids.includes(selectedCueId))}
+                  className="bg-brand/80 text-brand-foreground hover:bg-brand"
                   onSelect={() => {
                     selectCue(c.id)
                     if (videoRef.current) videoRef.current.currentTime = c.start
                   }}
-                  onCommit={(start, end) => onCuesChange(retime(cues, c.id, start, end))}
+                  onCommit={(start, end) => onCuesChange(retimeCluster(cues, c.ids, start, end))}
                 >
-                  <span className="truncate px-1 text-xs">
-                    {c.words.map((w) => w.text.trim()).join(' ')}
+                  <span className="whitespace-nowrap text-sm font-medium">
+                    {c.text}
                   </span>
                 </Block>
               ))}
@@ -257,7 +305,10 @@ export function Timeline({
                   duration={dur}
                   selected={o.id === selectedOverlayId}
                   className="bg-ok/25 ring-ok hover:bg-ok/35"
-                  onSelect={() => selectOverlay(o.id)}
+                  onSelect={() => {
+                    selectOverlay(o.id)
+                    if (o.kind === 'text') setInspectorTab('font')
+                  }}
                   onCommit={(start, end) => {
                     const next = clampOverlay({ ...o, start, end }, dur)
                     patchOverlay(o.id, next)
@@ -265,11 +316,11 @@ export function Timeline({
                   }}
                 >
                   {o.kind === 'text' ? (
-                    <span className="truncate px-1 text-xs">{o.text}</span>
+                    <span className="truncate text-sm font-medium">{o.text}</span>
                   ) : (
                     <>
                       <img src={o.url} alt="" className="size-6 shrink-0 rounded-xs object-cover" />
-                      <span className="truncate text-xs">{o.name}</span>
+                      <span className="truncate text-sm font-medium">{o.name}</span>
                     </>
                   )}
                 </Block>
@@ -278,10 +329,10 @@ export function Timeline({
 
             <div
               ref={headRef}
-              className="pointer-events-none absolute top-0 bottom-0 left-0 w-px bg-brand"
+              className="pointer-events-none absolute top-0 bottom-0 left-0 w-0.5 bg-brand"
               aria-hidden
             >
-              <span className="absolute -top-px -left-[3px] size-[7px] rounded-full bg-brand" />
+              <span className="absolute -top-px -left-[5px] size-[11px] rounded-full bg-brand" />
             </div>
           </div>
         </div>
@@ -382,21 +433,31 @@ function Block({ start, end, pps, duration, selected, className, onSelect, onCom
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       className={cn(
-        'absolute top-1 bottom-1 flex items-center gap-1.5 overflow-hidden rounded-md px-1 select-none',
-        'cursor-grab active:cursor-grabbing',
-        selected && 'ring-2 ring-foreground',
-        className,
+        'absolute top-1 bottom-1 z-0 select-none',
+        'cursor-grab active:cursor-grabbing hover:z-10',
+        selected && 'z-20',
       )}
       style={{ left: start * pps, width: w, touchAction: 'none' }}
     >
-      {/* Under this width a label is one clipped letter per block, which reads
-          as noise. The bar alone says when, and zooming in brings the text back. */}
-      {w >= LABEL_MIN_W && children}
+      <div
+        className={cn('absolute inset-0 rounded-lg', className, selected && 'ring-2 ring-foreground')}
+      />
+      <span className="pointer-events-none absolute inset-0 z-10 flex items-center gap-1.5 overflow-hidden px-2">
+        {children}
+      </span>
     </div>
   )
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+/** Percentile span, so the default zoom sizes a typical phrase chip, not a single word. */
+function spanPercentile(values: number[], p: number) {
+  if (values.length === 0) return 1
+  const spans = values.map((n) => Math.max(n, 0.05)).sort((a, b) => a - b)
+  const i = Math.min(spans.length - 1, Math.max(0, Math.floor((spans.length - 1) * p)))
+  return spans[i]
+}
 
 /** Tick times spaced so labels never collide, whatever the zoom. */
 function ticks(duration: number, pps: number) {

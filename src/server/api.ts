@@ -233,7 +233,8 @@ export const getProjectFn = createServerFn({ method: 'GET' })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }): Promise<Project | null> => {
     const userId = await requireUserId()
-    return getProject(data.id, userId)
+    const project = await getProject(data.id, userId)
+    return project
   })
 
 export const saveCues = createServerFn({ method: 'POST' })

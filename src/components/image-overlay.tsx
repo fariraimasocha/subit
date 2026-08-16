@@ -1,4 +1,11 @@
 import { useEffect, useRef, type RefObject } from 'react'
+import {
+  AlignmentGuides,
+  applyAlignmentGuides,
+  hideAlignmentGuides,
+  noteOverlaySnapChange,
+  snapOverlayAxes,
+} from '~/components/alignment-guides.tsx'
 import { clampOverlay, isImageOverlay, type Overlay } from '~/lib/overlays.ts'
 import { useEditor } from '~/store/editor.ts'
 
@@ -25,10 +32,18 @@ const HANDLE = 14
  */
 export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) {
   const layerRef = useRef<HTMLDivElement>(null)
+  const guidesRef = useRef<HTMLDivElement>(null)
   const { patchOverlay, selectedOverlayId, selectOverlay } = useEditor()
   // Resolved once on pointerdown, like the caption drag. `id` is the pointerId,
   // which is what stops a second finger hijacking the first one's drag.
-  const drag = useRef<{ id: number; mode: 'move' | 'size'; box: DOMRect; o: Overlay } | null>(null)
+  const drag = useRef<{
+    id: number
+    mode: 'move' | 'size'
+    box: DOMRect
+    o: Overlay
+    snapX: number | null
+    snapY: number | null
+  } | null>(null)
   const images = overlays.filter(isImageOverlay)
   const draggable = Boolean(onCommit)
 
@@ -60,7 +75,7 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     e.stopPropagation()
     selectOverlay(o.id)
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { id: e.pointerId, mode, box, o }
+    drag.current = { id: e.pointerId, mode, box, o, snapX: null, snapY: null }
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -70,10 +85,15 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     const y = ((e.clientY - d.box.top) / d.box.height) * 100
     // Resizing from the corner: the width is twice the distance to the centre,
     // because the image is centred on x/y and grows both ways.
-    const next =
-      d.mode === 'move'
-        ? { ...d.o, xPct: x, yPct: y }
-        : { ...d.o, widthPct: Math.abs(x - d.o.xPct) * 2 }
+    let next: Overlay
+    if (d.mode === 'move') {
+      const snap = snapOverlayAxes(x, y)
+      applyAlignmentGuides(guidesRef.current, snap.snappedX, snap.snappedY)
+      noteOverlaySnapChange(d, 'image', x, y, snap.snappedX, snap.snappedY)
+      next = { ...d.o, xPct: snap.xPct, yPct: snap.yPct }
+    } else {
+      next = { ...d.o, widthPct: Math.abs(x - d.o.xPct) * 2 }
+    }
     d.o = clampOverlay(next, duration)
     patchOverlay(d.o.id, d.o)
   }
@@ -82,12 +102,14 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
     const d = drag.current
     if (d?.id !== e.pointerId) return
     drag.current = null
+    hideAlignmentGuides(guidesRef.current)
     e.currentTarget.releasePointerCapture(e.pointerId)
     onCommit?.(d.o)
   }
 
   return (
-    <div ref={layerRef} className="pointer-events-none absolute inset-0 overflow-hidden">
+    <>
+      <div ref={layerRef} className="pointer-events-none absolute inset-0 overflow-hidden">
       {images.map((o) => {
         const selected = draggable && o.id === selectedOverlayId
         return (
@@ -134,6 +156,8 @@ export function ImageOverlay({ videoRef, overlays, duration, onCommit }: Props) 
           </div>
         )
       })}
-    </div>
+      </div>
+      <AlignmentGuides rootRef={guidesRef} />
+    </>
   )
 }

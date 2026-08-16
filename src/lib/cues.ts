@@ -164,3 +164,59 @@ export function editWord(cues: Cue[], cueId_: string, wordIndex: number, text: s
 export function cueAt(cues: Cue[], t: number): number {
   return cues.findIndex((c) => t >= c.start && t <= c.end)
 }
+
+export type CueCluster = {
+  id: string
+  ids: string[]
+  start: number
+  end: number
+  text: string
+}
+
+/**
+ * Join back-to-back short cues into phrase-length chips for the timeline.
+ * Stored cues stay as they are. The transcript panel still edits each one.
+ */
+export function clusterCues(
+  cues: Cue[],
+  opts?: { maxChars?: number; maxDur?: number; gap?: number },
+): CueCluster[] {
+  const maxChars = opts?.maxChars ?? 42
+  const maxDur = opts?.maxDur ?? 2.6
+  const gap = opts?.gap ?? 0.08
+  const out: CueCluster[] = []
+  for (const c of cues) {
+    const text = c.words.map((w) => w.text.trim()).join(' ')
+    const last = out[out.length - 1]
+    if (
+      last &&
+      c.start - last.end <= gap &&
+      last.text.length + 1 + text.length <= maxChars &&
+      c.end - last.start <= maxDur
+    ) {
+      last.end = c.end
+      last.text = `${last.text} ${text}`
+      last.ids.push(c.id)
+    } else {
+      out.push({ id: c.id, ids: [c.id], start: c.start, end: c.end, text })
+    }
+  }
+  return out
+}
+
+/** Scale every cue in a cluster into a new window, keeping relative word timing. */
+export function retimeCluster(cues: Cue[], ids: string[], start: number, end: number): Cue[] {
+  const members = ids.map((id) => cues.find((c) => c.id === id)).filter((c): c is Cue => Boolean(c))
+  if (members.length === 0 || !(end > start)) return cues
+  const old0 = members[0].start
+  const old1 = members[members.length - 1].end
+  const oldSpan = old1 - old0
+  if (oldSpan <= 0) return cues
+  let next = cues
+  for (const m of members) {
+    const s = start + ((m.start - old0) / oldSpan) * (end - start)
+    const e = start + ((m.end - old0) / oldSpan) * (end - start)
+    next = retime(next, m.id, s, e)
+  }
+  return next
+}

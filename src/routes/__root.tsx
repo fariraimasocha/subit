@@ -6,6 +6,9 @@ import { KumoRouterLink } from '~/components/kumo-link.tsx'
 import { ToastProvider } from '~/components/providers/ToastProvider.tsx'
 import styles from '~/globals.css?url'
 
+const SITE_URL = 'https://subit.farirai.workers.dev'
+const OG_IMAGE = `${SITE_URL}/og-image.png`
+
 /**
  * Full-document SSR. `shellComponent` owns <html>, <head> and <body>, so the
  * server streams a real document and <HeadContent> picks up `head()` from
@@ -18,6 +21,17 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'Subit' },
       { name: 'description', content: 'Burn word by word captions into your videos.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: `${SITE_URL}/` },
+      { property: 'og:title', content: 'Subit' },
+      { property: 'og:description', content: 'Burn word by word captions into your videos.' },
+      { property: 'og:image', content: OG_IMAGE },
+      { property: 'og:image:type', content: 'image/png' },
+      { property: 'og:image:width', content: '1200' },
+      { property: 'og:image:height', content: '630' },
+      { property: 'og:image:alt', content: 'Subit, burn word by word captions into your videos' },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:image', content: OG_IMAGE },
     ],
     links: [
       { rel: 'stylesheet', href: styles },

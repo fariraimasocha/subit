@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupWords, splitCue, mergeCues, retime, editWord, type Word } from './cues.ts'
+import { clusterCues, groupWords, splitCue, mergeCues, retime, editWord, type Cue, type Word } from './cues.ts'
 
 /** Words at a steady 0.3s each starting at `from`. */
 const say = (text: string, from = 0, each = 0.3): Word[] =>
@@ -123,4 +123,17 @@ test('editWord changes text and leaves timings alone', () => {
   const out = editWord(cues, cues[0].id, 0, "they're")
   assert.equal(out[0].words[0].text, "they're")
   assert.deepEqual(out[0].words.map((w) => [w.start, w.end]), before)
+})
+
+test('clusterCues joins back-to-back short cues into one phrase chip', () => {
+  const cues: Cue[] = [
+    { id: 'a', start: 0, end: 0.34, words: [{ text: "If", start: 0, end: 0.1 }, { text: "you're", start: 0.1, end: 0.22 }, { text: 'a', start: 0.22, end: 0.34 }] },
+    { id: 'b', start: 0.34, end: 0.62, words: [{ text: 'recent', start: 0.34, end: 0.62 }] },
+    { id: 'c', start: 0.62, end: 1.58, words: [{ text: 'graduate', start: 0.62, end: 1.2 }, { text: 'and', start: 1.2, end: 1.58 }] },
+  ]
+  const groups = clusterCues(cues)
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0].text, "If you're a recent graduate and")
+  assert.deepEqual(groups[0].ids, ['a', 'b', 'c'])
+  assert.equal(groups[0].end, 1.58)
 })

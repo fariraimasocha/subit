@@ -10,6 +10,7 @@ import { EditorInspector } from '~/components/editor-inspector.tsx'
 import { IngestProgress } from '~/components/ingest-progress.tsx'
 import { ProgressBar } from '~/components/interior/progress-bar.tsx'
 import { StatusBadge } from '~/components/status-badge.tsx'
+import { OverlayFontPanel } from '~/components/overlay-font-panel.tsx'
 import { StylePanel } from '~/components/style-panel.tsx'
 import { TranscriptPanel } from '~/components/transcript-panel.tsx'
 import { Button } from '~/components/ui/button.tsx'
@@ -19,7 +20,7 @@ import { Skeleton } from '~/components/ui/skeleton.tsx'
 import { Timeline } from '~/components/timeline.tsx'
 import { VideoPlayer } from '~/components/video-player.tsx'
 import type { Cue } from '~/lib/cues.ts'
-import { clampOverlay, type Overlay } from '~/lib/overlays.ts'
+import { clampOverlay, isTextOverlay, type Overlay } from '~/lib/overlays.ts'
 import { projectQuery, qk, useConfig } from '~/lib/queries.ts'
 import { SetupNotice } from '~/components/setup-notice.tsx'
 import { DEFAULT_THEME, themePaintKey, type Theme } from '~/lib/theme.ts'
@@ -43,7 +44,19 @@ function Editor() {
   const qc = useQueryClient()
   const { config, ready, known } = useConfig()
   const { data: project, isPending, error } = useQuery(projectQuery(id, ready))
-  const { theme, setTheme, patchTheme, overlays, setOverlays, addOverlay, removeOverlay, selectCue } = useEditor()
+  const {
+    theme,
+    setTheme,
+    patchTheme,
+    overlays,
+    setOverlays,
+    addOverlay,
+    patchOverlay,
+    removeOverlay,
+    selectCue,
+    selectedOverlayId,
+    setInspectorTab,
+  } = useEditor()
   const [currentTime, setCurrentTime] = useState(0)
   const [jobId, setJobId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -168,10 +181,11 @@ function Editor() {
   const addText = () => {
     const at = videoRef.current?.currentTime ?? 0
     const t = useEditor.getState().theme
+    const overlayId = crypto.randomUUID()
     addOverlay(
       clampOverlay(
         {
-          id: crypto.randomUUID(),
+          id: overlayId,
           kind: 'text',
           text: 'Text',
           name: 'Text',
@@ -188,6 +202,7 @@ function Editor() {
         project?.duration ?? 0,
       ),
     )
+    setInspectorTab('font')
     commitOverlays()
   }
 
@@ -343,6 +358,9 @@ function Editor() {
     },
   }
 
+  const selected = overlays.find((o) => o.id === selectedOverlayId)
+  const selectedText = selected && isTextOverlay(selected) ? selected : null
+
   return (
     <Shell>
       {/* Editor chrome, not page content: the actions stay reachable while the
@@ -492,8 +510,36 @@ function Editor() {
             </>
           }
           styles={<StylePanel {...styleProps} pane="presets" />}
-          font={<StylePanel {...styleProps} pane="font" />}
-          layout={<StylePanel {...styleProps} pane="layout" />}
+          font={
+            selectedText ? (
+              <OverlayFontPanel
+                overlay={selectedText}
+                videoHeight={project.height ?? 1080}
+                onChange={(patch) => {
+                  patchOverlay(selectedText.id, patch)
+                  commitOverlays()
+                }}
+                pane="font"
+              />
+            ) : (
+              <StylePanel {...styleProps} pane="font" />
+            )
+          }
+          layout={
+            selectedText ? (
+              <OverlayFontPanel
+                overlay={selectedText}
+                videoHeight={project.height ?? 1080}
+                onChange={(patch) => {
+                  patchOverlay(selectedText.id, patch)
+                  commitOverlays()
+                }}
+                pane="layout"
+              />
+            ) : (
+              <StylePanel {...styleProps} pane="layout" />
+            )
+          }
         />
       </div>
     </Shell>
