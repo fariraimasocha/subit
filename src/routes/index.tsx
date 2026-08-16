@@ -73,13 +73,15 @@ function Landing() {
       </header>
 
       <section className="relative mx-auto max-w-3xl px-6 pt-20 pb-14 text-center">
-        <Badge
-          variant="outline"
-          className="gap-2 border-border/35 bg-surface-2 px-4 py-1.5 font-mono font-semibold tracking-[0.12em] text-text-secondary uppercase"
-        >
-          <span className="size-1.5 rounded-full bg-brand" />
-          Open source, runs on your own Node host
-        </Badge>
+        <div className="flex justify-center">
+          <Badge
+            variant="outline"
+            className="!h-auto !w-auto !max-w-full !shrink !flex-wrap justify-center gap-2 !whitespace-normal border-border/35 bg-surface-2 px-3 py-1.5 text-center font-mono text-[11px] font-semibold tracking-[0.06em] text-text-secondary uppercase sm:px-4 sm:text-xs sm:tracking-[0.12em]"
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-brand" />
+            Open source, runs on your own Node host
+          </Badge>
+        </div>
 
         <h1 className="mt-6 text-5xl font-extrabold tracking-tighter text-balance sm:text-7xl">
           Captions that stop the scroll.
